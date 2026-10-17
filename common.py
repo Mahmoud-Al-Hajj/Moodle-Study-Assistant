@@ -1,6 +1,7 @@
 """Shared config, logging, session checks, throttling and error handling."""
 
 import argparse
+import json
 import logging
 import os
 import re
@@ -21,6 +22,8 @@ DATA_DIR = ROOT / "data"
 DEBUG_DIR = DATA_DIR / "debug"
 DOWNLOADS_DIR = ROOT / "downloads"
 MANIFEST_FILE = DATA_DIR / "manifest.json"
+# Files the tool writes into downloads/<course>/ itself (not course material).
+GENERATED_FILES = {"links.md", "index.html"}
 
 THROTTLE_SECONDS = 1.5
 NAV_TIMEOUT_MS = 60_000
@@ -172,6 +175,35 @@ def sanitize_name(name: str, max_len: int = 80, fallback: str = "untitled") -> s
     if name.split(".")[0].upper() in _WINDOWS_RESERVED:
         name = "_" + name
     return name
+
+
+# --- Local layout and atomic writes (shared by downloader.py and extract.py) ---
+
+def course_dir(manifest: dict) -> Path:
+    return DOWNLOADS_DIR / sanitize_name(manifest["course_name"], max_len=60, fallback=f"course-{manifest['course_id']}")
+
+
+def section_dir(manifest: dict, item: dict) -> Path:
+    name = sanitize_name(item["section_name"], max_len=50, fallback="section")
+    return course_dir(manifest) / f"{item['section_number']:02d}-{name}"
+
+
+def write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + ".part")
+    part.write_bytes(data)
+    part.replace(path)
+
+
+def write_text(path: Path, text: str) -> None:
+    write_bytes(path, text.encode("utf-8"))
+
+
+def write_json_atomic(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
 
 
 def base_parser(description: str) -> argparse.ArgumentParser:

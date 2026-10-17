@@ -15,13 +15,14 @@ To add a real page you saved: put it in fixtures/, replace the site URL
 import http.server
 import threading
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASE = "/moodle"
 
 # (path, ?id=) -> fixture file. Course ids: 100 Boost 4.x, 200 Classic 3.x,
-# 300 one-section-per-page, 400 unknown theme, 500 stray links, 999 error page.
+# 300 one-section-per-page, 400 unknown theme, 500 stray links, 700 download
+# edge cases, 999 error page.
 ROUTES = {
     ("/my/", ""): "dashboard.html",
     ("/course/view.php", "100"): "course_boost.html",
@@ -31,10 +32,28 @@ ROUTES = {
     ("/course/view.php", "300"): "course_onepage.html",
     ("/course/view.php", "400"): "course_custom_theme.html",
     ("/course/view.php", "500"): "course_stray_links.html",
+    ("/course/view.php", "700"): "course_downloads.html",
     ("/course/view.php", "999"): "error_no_course.html",
+    # Activity pages (Stage 3)
+    ("/mod/folder/view.php", "12"): "folder_12.html",
+    ("/mod/assign/view.php", "14"): "assign_14.html",
+    ("/mod/page/view.php", "17"): "page_17.html",
+    ("/mod/resource/view.php", "71"): "resource_71_embedded.html",
     ("/enrol/index.php", "600"): "enrol.html",
 }
 REDIRECTS = {("/course/view.php", "600"): "/enrol/index.php?id=600"}
+
+# resource id -> where /mod/resource/view.php?id=X&redirect=1 sends you. Resource 71 has
+# no entry: it answers with its embedded-viewer page instead (tests the fallback).
+RESOURCE_FILES = {
+    "11": "/pluginfile.php/111/mod_resource/content/1/Lecture%201%20slides.pdf",
+    "72": "/pluginfile.php/172/mod_resource/content/1/missing.pdf",
+    "73": "/pluginfile.php/173/mod_resource/content/1/notes.pdf",
+    "74": "/pluginfile.php/174/mod_resource/content/1/notes.pdf",
+}
+# url id -> external target of /mod/url/view.php?id=X&redirect=1
+URL_TARGETS = {"18": "http://example.org/visualgo"}
+MISSING_FILES = {"/pluginfile.php/172/mod_resource/content/1/missing.pdf"}
 
 # Shown on the login page when auto_login is on: plays the user typing their credentials.
 AUTO_LOGIN_JS = ("<script>setTimeout(() => { document.cookie = 'MoodleSession=good; path=/';"
@@ -44,6 +63,8 @@ AUTO_LOGIN_JS = ("<script>setTimeout(() => { document.cookie = 'MoodleSession=go
 class Handler(http.server.BaseHTTPRequestHandler):
     auto_login = False
     requests: list[str] = []
+    # pluginfile paths that act as if the session expired (redirect to login)
+    expire_files: set[str] = set()
 
     def log_message(self, *args):
         pass
@@ -69,6 +90,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if "MoodleSession=good" not in cookie:
             return self.redirect("/login/index.php")
 
+        if path.startswith("/pluginfile.php/"):
+            return self.pluginfile(path)
+        if q.get("redirect") == ["1"]:
+            if path == "/mod/resource/view.php" and cid in RESOURCE_FILES:
+                return self.redirect(RESOURCE_FILES[cid])
+            if path == "/mod/url/view.php" and cid in URL_TARGETS:
+                return self.redirect(URL_TARGETS[cid], absolute=True)
         if path == "/course/view.php" and cid == "300" and "section" in q:
             return self.html(self.fixture(f"onepage_section{q['section'][0]}.html"))
         if (path, cid) in REDIRECTS:
@@ -89,9 +117,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def redirect(self, path: str):
+    def pluginfile(self, path: str):
+        """Serve fake file bytes, like Moodle's pluginfile.php."""
+        if path in Handler.expire_files:
+            return self.redirect("/login/index.php")
+        if path in MISSING_FILES:
+            return self.status(404)
+        body = f"fake contents of {unquote(path)}".encode("utf-8")
+        self.send_response(200)
+        ctype = "application/pdf" if path.endswith(".pdf") else "application/octet-stream"
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Disposition", "inline")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def redirect(self, path: str, absolute: bool = False):
         self.send_response(303)
-        self.send_header("Location", BASE + path)
+        self.send_header("Location", path if absolute else BASE + path)
         self.end_headers()
 
     def status(self, code: int):

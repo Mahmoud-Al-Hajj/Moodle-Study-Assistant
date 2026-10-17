@@ -65,6 +65,33 @@ PATTERNS = {
     # Links to a single-section page. {course_id} is filled in at runtime.
     "section_page_url": (r"/course/(?:view\.php\?(?:[^#]*&)?id={course_id}&(?:[^#]*&)?section=(\d+)"
                          r"|section\.php\?(?:[^#]*&)?id=(\d+))"),
+    # Path of a file inside a folder activity: /pluginfile.php/<ctx>/mod_folder/content/<rev>/<subpath>
+    # (also valid Python regex; used by downloader.py)
+    "folder_file_subpath": r"/mod_folder/content/\d+/(.+)$",
+}
+
+# --- Activity pages (Stage 3, downloader.py) ------------------------------------
+# All lists below are priority lists: the first selector that matches wins.
+RESOURCE = {
+    # Only used when ?redirect=1 doesn't lead straight to the file (embedded viewer pages).
+    "file_element": ['object[data*="/mod_resource/content/"]', 'embed[src*="/mod_resource/content/"]',
+                     'iframe[src*="/mod_resource/content/"]', 'a[href*="/mod_resource/content/"]'],
+}
+FOLDER = {
+    "file_link": ['.foldertree a[href*="/pluginfile.php/"]', '#region-main a[href*="/mod_folder/content/"]'],
+}
+ASSIGN = {
+    # Teacher's instructions only. Submission areas are never read.
+    "instructions": ["#intro", ".activity-description"],
+    "dates": [".activity-dates", '[data-region="activity-dates"]'],
+    "attachment_link": ['a[href*="/mod_assign/introattachment/"]'],
+}
+PAGE = {
+    "content": ["#region-main .box.generalbox", '#region-main [role="main"]', "#region-main"],
+}
+URL = {
+    # Only used when ?redirect=1 doesn't redirect; first link pointing off the Moodle site wins.
+    "external_link": [".urlworkaround a", "#region-main a[href]"],
 }
 
 # --- Classification -------------------------------------------------------------

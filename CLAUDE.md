@@ -15,11 +15,18 @@ Full spec: PLAN.md. Scraper details (manifest format, folder layout): `.claude/s
 
 ## Manifest (`data/manifest.json`)
 
-- Each item has: `section_number`, `section_name`, `title`, `type`, `url`, `local_path`, `status`, plus `id`, `module` and `note`.
-- `status: "unavailable"` means the item is restricted and has no link. Stage 3 must skip it, and `note` holds the restriction text.
+- Each item has: `section_number`, `section_name`, `title`, `type`, `url`, `local_path`, `status`, plus `id`, `module`, `note`, `files` and `target_url`.
+- `status: "unavailable"` means the item is restricted and has no link. Stage 3 skips it without ever requesting it, and `note` holds the restriction text.
+- Stage 3 statuses: `downloaded`, `failed` (retried on the next run) and `skipped`.
 - The full format is in the skill.
 
 ## Progress
 
-- Done: Step 0, Stage 1 (`login.py`, `check_session.py`), Stage 2 (`scrape.py`, manifest only).
-- Next: Stage 3 (downloads). Only start it when the user says so.
+- Done: Step 0, Stage 1 (`login.py`, `check_session.py`), Stage 2 (`scrape.py` crawl and manifest), Stage 3 (`downloader.py`, run by `scrape.py`), Stage 4 (`extract.py`, text extraction + `index.html`; details in `.claude/skills/text-extraction/SKILL.md`).
+- Next: Stage 5 (`search.py`, `cards.py`, `quiz.py`), built on `data/text/<course>/passages.jsonl`. Only start it when the user says so.
+
+## Shared helpers
+
+- `common.py` holds the local layout and atomic writes: `course_dir`, `section_dir`, `write_text`, `write_bytes`, `write_json_atomic`, `GENERATED_FILES`.
+- Reuse these instead of rebuilding paths.
+- `extract.py` must not import `downloader.py` or Playwright.

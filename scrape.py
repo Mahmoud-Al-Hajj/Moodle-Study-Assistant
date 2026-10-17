@@ -1,11 +1,13 @@
-"""Stage 2: crawl one course and write data/manifest.json (no downloading yet).
+"""Stages 2 and 3: crawl one course, write data/manifest.json, download everything.
 
 Opens {MOODLE_URL}/course/view.php?id=<COURSE_ID> with the session saved by
 login.py, walks every section, and records each item with its section, title,
-type, URL and status. Downloading comes in Stage 3.
+type, URL and status. Then downloads the material into downloads/<course>/
+(downloader.py). Reruns only fetch what is missing.
 
-    python scrape.py                 # crawl COURSE_ID from .env
-    python scrape.py --course 5678   # crawl another course
+    python scrape.py                 # crawl + download COURSE_ID from .env
+    python scrape.py --no-download   # crawl and write the manifest only
+    python scrape.py --course 5678   # another course
     python scrape.py --save-html     # also save the course page to data/debug/course_page.html
     python scrape.py --headed        # watch the browser while it works
 
@@ -24,8 +26,10 @@ from playwright.sync_api import sync_playwright
 
 import moodle_selectors as SEL
 from common import (DATA_DIR, DEBUG_DIR, MANIFEST_FILE, ROOT, ConfigError,
-                    SessionExpired, Throttle, base_parser, goto, is_logged_in,
-                    load_config, log, new_session_context, run)
+                    SessionExpired, Throttle, base_parser, course_dir, goto,
+                    is_logged_in, load_config, log, new_session_context, run,
+                    write_json_atomic)
+from downloader import download_all, files_on_disk
 
 # Statuses written by Stage 3; a recrawl keeps them (with local_path and note).
 SETTLED_STATUSES = {"downloaded", "failed", "skipped"}
@@ -361,6 +365,8 @@ def build_manifest(result: CourseCrawl, cfg, previous: dict | None) -> dict:
                 "id": it["id"],
                 "module": it["module"],
                 "note": note,
+                "files": old.get("files", []) if settled else [],
+                "target_url": old.get("target_url", "") if settled else "",
             })
     return {
         "moodle_url": cfg.moodle_url,
@@ -372,11 +378,6 @@ def build_manifest(result: CourseCrawl, cfg, previous: dict | None) -> dict:
     }
 
 
-def write_json_atomic(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(path)
 
 
 def print_summary(manifest: dict, warnings: list[str]) -> None:
@@ -412,21 +413,45 @@ def main(args) -> int:
         browser, context = new_session_context(p, headless=not args.headed)
         try:
             result, warnings = crawl(context.new_page(), cfg, throttle, args.save_html)
+            manifest = build_manifest(result, cfg, load_previous(cfg.course_id))
+            write_json_atomic(MANIFEST_FILE, manifest)
+            parked = DATA_DIR / f"manifest-course-{cfg.course_id}.json"
+            if parked.exists():
+                parked.unlink()  # its progress now lives in manifest.json
+            print_summary(manifest, warnings)
+            if args.no_download:
+                return 0
+            print()
+            results = download_all(context, cfg, manifest, throttle, lambda m: write_json_atomic(MANIFEST_FILE, m))
         finally:
             browser.close()
-
-    manifest = build_manifest(result, cfg, load_previous(cfg.course_id))
-    write_json_atomic(MANIFEST_FILE, manifest)
-    parked = DATA_DIR / f"manifest-course-{cfg.course_id}.json"
-    if parked.exists():
-        parked.unlink()  # its progress now lives in manifest.json
-    print_summary(manifest, warnings)
+    print_download_summary(manifest, results)
     return 0
 
 
+def print_download_summary(manifest: dict, results: dict[str, list[dict]]) -> None:
+    print()
+    print(f"Downloads: {course_dir(manifest).relative_to(ROOT)}")
+    labels = [("new", "downloaded now"), ("present", "already present"), ("skipped", "skipped"),
+              ("unavailable", "unavailable"), ("failed", "failed")]
+    for key, label in labels:
+        group = results[key]
+        detail = ""
+        if key == "skipped" and group:
+            detail = "   (" + ", ".join(f"{m} {n}" for m, n in Counter(it["module"] for it in group).most_common()) + ")"
+        print(f"  {label:<16} {len(group):>4}{detail}")
+    for it in results["failed"]:
+        print(f"    - {it['title']} [{it['module']}]: {it['note']}")
+    links = sum(1 for it in manifest["items"] if it["type"] == "url" and it.get("target_url"))
+    print(f"  Files on disk: {files_on_disk(manifest)}" + (f"   (+ links.md with {links} links)" if links else ""))
+    if results["failed"]:
+        print("Rerun python scrape.py to retry the failed items.")
+
+
 if __name__ == "__main__":
-    parser = base_parser("Crawl a Moodle course and write data/manifest.json.")
+    parser = base_parser("Crawl a Moodle course, write data/manifest.json and download its material.")
     parser.add_argument("--course", help="course id (overrides COURSE_ID in .env)")
     parser.add_argument("--headed", action="store_true", help="show the browser window")
+    parser.add_argument("--no-download", action="store_true", help="crawl and write the manifest only")
     parser.add_argument("--save-html", action="store_true", help="save the course page to data/debug/course_page.html")
     run(main, parser.parse_args())

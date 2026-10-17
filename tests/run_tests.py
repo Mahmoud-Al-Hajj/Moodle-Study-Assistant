@@ -1,4 +1,4 @@
-"""Tests for Stages 1-2 against a fake Moodle (tests/fake_moodle.py).
+"""Tests for Stages 1-4 against a fake Moodle (tests/fake_moodle.py).
 
     .venv\\Scripts\\python tests\\run_tests.py            # everything (one test opens a browser window)
     set SKIP_HEADED=1 & .venv\\Scripts\\python tests\\run_tests.py   # skip the visible-browser login test
@@ -20,9 +20,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import fake_moodle  # noqa: E402
+from test_extract import TestExtract  # noqa: E402,F401  (Stage 4 tests run with the rest)
 
 PROJECT = Path(__file__).resolve().parents[1]
-SCRIPTS = ["common.py", "moodle_selectors.py", "login.py", "check_session.py", "scrape.py"]
+SCRIPTS = ["common.py", "moodle_selectors.py", "login.py", "check_session.py", "scrape.py", "downloader.py"]
 
 SERVER = None
 SITE = ""
@@ -42,6 +43,7 @@ class Workspace(unittest.TestCase):
 
     def setUp(self):
         fake_moodle.Handler.auto_login = False
+        fake_moodle.Handler.expire_files = set()
         self.dir = Path(tempfile.mkdtemp(prefix="moodle-test-"))
         for name in SCRIPTS:
             shutil.copy(PROJECT / name, self.dir / name)
@@ -103,7 +105,7 @@ class TestSession(Workspace):
 
     def test_scrape_with_expired_session(self):
         self.set_cookie("stale")
-        code, out = self.run_script("scrape.py")
+        code, out = self.run_script("scrape.py", "--no-download")
         self.assertEqual(code, 2, out)
         self.assertIn("expired", out)
         self.assertFalse((self.dir / "data" / "manifest.json").exists())
@@ -139,6 +141,13 @@ class TestSession(Workspace):
 
 
 class TestScrape(Workspace):
+    """Stage 2: crawl and manifest only (--no-download)."""
+
+    def run_script(self, script, *args, **kw):
+        if script == "scrape.py" and "--no-download" not in args:
+            args = (*args, "--no-download")
+        return super().run_script(script, *args, **kw)
+
     def test_boost_course(self):
         code, out = self.run_script("scrape.py")
         self.assertEqual(code, 0, out)
@@ -167,7 +176,8 @@ class TestScrape(Workspace):
         self.assertTrue(all(it["type"] == "other" for it in m["items"] if it["module"] == "inline_file"))
 
         # The seven required fields plus id, module, note, on every item.
-        fields = {"section_number", "section_name", "title", "type", "url", "local_path", "status", "id", "module", "note"}
+        fields = {"section_number", "section_name", "title", "type", "url", "local_path", "status", "id", "module",
+                  "note", "files", "target_url"}
         for it in m["items"]:
             self.assertEqual(set(it), fields)
             self.assertEqual(it["local_path"], "")
@@ -280,6 +290,142 @@ class TestScrape(Workspace):
         code, out = self.run_script("scrape.py", "--course", "abc")
         self.assertEqual(code, 1, out)
         self.assertIn("must be a number", out)
+
+
+class TestDownload(Workspace):
+    """Stage 3: downloading."""
+
+    COURSE_DIR = Path("downloads") / "Data Structures (CS201)"
+    WEEK1 = COURSE_DIR / "01-Week 1 Arrays Lists"
+
+    def path(self, *parts) -> Path:
+        return self.dir.joinpath(*parts)
+
+    def download_requests(self) -> list[str]:
+        return [r for r in fake_moodle.Handler.requests if "/pluginfile.php/" in r or "/mod/" in r]
+
+    def all_files(self) -> set[str]:
+        root = self.path("downloads")
+        return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()} if root.exists() else set()
+
+    def test_full_download(self):
+        fake_moodle.Handler.requests.clear()
+        code, out = self.run_script("scrape.py")
+        self.assertEqual(code, 0, out)
+        c, w = "Data Structures (CS201)", "Data Structures (CS201)/01-Week 1 Arrays Lists"
+        self.assertEqual(self.all_files(), {
+            f"{c}/00-General/syllabus.pdf",
+            f"{w}/Lecture 1 slides.pdf",
+            f"{w}/Lab files/lab1.txt",
+            f"{w}/Lab files/data/sample data.csv",
+            f"{w}/قراءة 1.pdf",
+            f"{w}/Homework 1 - instructions.md",
+            f"{w}/rubric.pdf",
+            f"{w}/hw1.pdf",
+            f"{w}/Notes page.html",
+            f"{c}/links.md",
+        })
+        self.assertEqual(self.path(self.WEEK1, "Lecture 1 slides.pdf").read_bytes(),
+                         b"fake contents of /pluginfile.php/111/mod_resource/content/1/Lecture 1 slides.pdf")
+
+        md = self.path(self.WEEK1, "Homework 1 - instructions.md").read_text(encoding="utf-8")
+        self.assertIn("500-word reflection", md)
+        self.assertIn("Due:", md)
+        self.assertIn("rubric.pdf", md)
+        self.assertNotIn("secret draft", md)  # submissions are never read
+        self.assertIn("Big-O cheat sheet", self.path(self.WEEK1, "Notes page.html").read_text(encoding="utf-8"))
+        links = self.path(self.COURSE_DIR, "links.md").read_text(encoding="utf-8")
+        self.assertIn("[Visualgo](http://example.org/visualgo)", links)
+        self.assertIn("## 02 Week 2", links)
+
+        items = self.by_id(self.manifest())
+        self.assertEqual(items["cm:10"]["status"], "skipped")
+        self.assertIn("forum", items["cm:10"]["note"])
+        self.assertEqual(items["cm:15"]["status"], "unavailable")
+        downloaded = {i for i, it in items.items() if it["status"] == "downloaded"}
+        self.assertEqual(len(downloaded), 8)
+        self.assertEqual(items["cm:18"]["target_url"], "http://example.org/visualgo")
+        self.assertEqual(items["cm:12"]["local_path"], (self.WEEK1 / "Lab files").as_posix())
+        self.assertEqual(len(items["cm:12"]["files"]), 2)
+        self.assertEqual(len(items["cm:14"]["files"]), 2)
+        self.assertEqual(items["cm:11"]["local_path"], (self.WEEK1 / "Lecture 1 slides.pdf").as_posix())
+
+        reqs = self.download_requests()
+        self.assertFalse([r for r in reqs if "/mod/forum/" in r or "/mod/quiz/" in r], reqs)
+        self.assertNotIn("example.org", " ".join(reqs))
+        self.assertIn("downloaded now      8", out)
+        self.assertIn("Files on disk: 9", out)
+        self.assertIn("links.md with 1 links", out)
+        self.assertFalse(list(self.path("downloads").rglob("*.part")))
+
+    def test_rerun_downloads_nothing(self):
+        self.run_script("scrape.py")
+        before = self.manifest()["items"]
+        fake_moodle.Handler.requests.clear()
+        code, out = self.run_script("scrape.py")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.download_requests(), [])
+        self.assertEqual(self.manifest()["items"], before)
+        self.assertIn("already present     8", out)
+
+    def test_deleted_file_is_fetched_again(self):
+        self.run_script("scrape.py")
+        self.path(self.WEEK1, "Lecture 1 slides.pdf").unlink()
+        fake_moodle.Handler.requests.clear()
+        code, out = self.run_script("scrape.py")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.path(self.WEEK1, "Lecture 1 slides.pdf").exists())
+        self.assertEqual(self.download_requests(), [
+            "/moodle/mod/resource/view.php?id=11&redirect=1",
+            "/moodle/pluginfile.php/111/mod_resource/content/1/Lecture%201%20slides.pdf"])
+
+    def test_no_download_flag(self):
+        fake_moodle.Handler.requests.clear()
+        code, out = self.run_script("scrape.py", "--no-download")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.download_requests(), [])
+        self.assertFalse(self.path("downloads").exists())
+        self.assertTrue(all(it["status"] in ("pending", "unavailable") for it in self.manifest()["items"]))
+
+    def test_edge_cases_fallback_404_and_name_clash(self):
+        code, out = self.run_script("scrape.py", "--course", "700")
+        self.assertEqual(code, 0, out)  # one failed item never stops the run
+        self.assertEqual(self.all_files(), {"Edge Cases/01-Readings/embedded.pdf",
+                                            "Edge Cases/01-Readings/notes.pdf",
+                                            "Edge Cases/01-Readings/notes (cm74).pdf"})
+        items = self.by_id(self.manifest())
+        self.assertEqual(items["cm:72"]["status"], "failed")
+        self.assertIn("HTTP 404", items["cm:72"]["note"])
+        self.assertIn("Broken file [resource]: HTTP 404", out)
+        self.assertEqual(items["cm:73"]["local_path"], "downloads/Edge Cases/01-Readings/notes.pdf")
+        self.assertEqual(items["cm:74"]["local_path"], "downloads/Edge Cases/01-Readings/notes (cm74).pdf")
+
+        # Rerun: only the failed item is retried; the clash resolves to the same names.
+        fake_moodle.Handler.requests.clear()
+        code, out = self.run_script("scrape.py", "--course", "700")
+        self.assertEqual(self.download_requests(), [
+            "/moodle/mod/resource/view.php?id=72&redirect=1",
+            "/moodle/pluginfile.php/172/mod_resource/content/1/missing.pdf"])
+        self.assertEqual(len(self.all_files()), 3)
+
+    def test_session_expires_mid_download(self):
+        fake_moodle.Handler.expire_files = {"/pluginfile.php/174/mod_resource/content/1/notes.pdf"}
+        code, out = self.run_script("scrape.py", "--course", "700")
+        self.assertEqual(code, 2, out)
+        self.assertIn("Progress so far is saved", out)
+        items = self.by_id(self.manifest())
+        self.assertEqual(items["cm:71"]["status"], "downloaded")
+        self.assertEqual(items["cm:73"]["status"], "downloaded")
+        self.assertNotEqual(items["cm:74"]["status"], "downloaded")
+        self.assertFalse(list(self.path("downloads").rglob("*.part")))
+
+        fake_moodle.Handler.expire_files = set()
+        fake_moodle.Handler.requests.clear()
+        code, out = self.run_script("scrape.py", "--course", "700")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.by_id(self.manifest())["cm:74"]["status"], "downloaded")
+        reqs = self.download_requests()
+        self.assertFalse([r for r in reqs if "id=71" in r or "id=73" in r], reqs)  # not fetched again
 
 
 if __name__ == "__main__":
