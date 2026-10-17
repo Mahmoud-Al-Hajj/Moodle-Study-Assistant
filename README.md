@@ -6,7 +6,7 @@ A personal tool that collects the material from one Moodle course into a local, 
 - Everything runs locally and uses no paid services.
 - The full plan is in [PLAN.md](PLAN.md). The rules for Claude are in [CLAUDE.md](CLAUDE.md).
 
-**Status:** Stages 1-4 are done: login and session check, course crawl to `data/manifest.json`, downloads to `downloads/<course>/`, and text extraction with a browsable `index.html`. Stage 5 (search, flashcards, quiz) is next.
+**Status:** Stages 1-4 are done: login and session check, course crawl to `data/manifest.json`, downloads to `downloads/<course>/`, and text extraction with a browsable `index.html`. `update` runs all of it in one command. Stage 5 (search, flashcards, quiz) is next.
 
 ## Setup (once, in PowerShell)
 
@@ -21,6 +21,53 @@ copy .env.example .env                      # then edit .env
 In `.env`, keep `MOODLE_URL=https://haigmoodle.haigazian.edu.lb/moodle` and set `COURSE_ID`. That's the number after `?id=` when you open the course in your browser. Your password never goes in `.env`, or anywhere else.
 
 If PowerShell blocks `Activate.ps1`, skip activation and type `.venv\Scripts\python` instead of `python` in every command below.
+
+## Update everything with one command
+
+```powershell
+.\update                    # check session, log in if needed, crawl, download, extract, open the viewer
+.\update --no-open          # same, without opening the viewer
+.\update --course 5678      # another course
+.\update --force            # re-extract every file
+.\update --no-download      # crawl only, then extract what's already on disk
+.\update --verbose          # detailed logging (also --headed, --save-html)
+```
+
+`update.bat` runs `update.py` with the project's `.venv`, so you don't need to activate anything or type `.venv\Scripts\python`. It also works from any folder: `C:\Users\user\Desktop\moodle-study\update`.
+
+It runs four steps and stops at the first one that fails:
+
+1. **Check the session.** If it has expired, the login browser opens, as with `login.py`. Log in, press Enter, and the update carries on.
+2. **Crawl and download** (`scrape.py`): only new or failed items are fetched.
+3. **Extract** (`extract.py`): only new or changed files.
+4. **Open** `downloads\<course>\index.html` in your browser.
+
+A run with nothing new looks like this (timings vary):
+
+```
+=== Step 1/4: check the session ===
+... INFO    Session is valid.
+
+=== Step 2/4: crawl the course and download ===
+...
+  downloaded now      0
+  already present    62
+  ...
+  failed              1
+    - Article Presentation Schedule [resource]: HTTP 404
+
+=== Step 3/4: extract text ===
+...
+Files: 32   extracted now 0, unchanged 32, removed 0
+...
+
+=== Step 4/4: course viewer ===
+... INFO    Opening downloads\<course>\index.html
+
+Update finished in 20 s.
+```
+
+The individual scripts below still work on their own.
 
 ## Stage 1: log in and check the session
 
@@ -128,7 +175,7 @@ Rerunning `scrape.py` then `extract.py` keeps everything up to date. Files that 
 python tests\run_tests.py
 ```
 
-This runs 31 tests: 25 against a local imitation of Moodle, plus 6 for text extraction on sample documents generated at run time. They cover Boost and Classic themes, the `/moodle` subpath, expired and guest sessions, restricted items, unknown markup, and downloads (embedded viewers, folders, assignments, links, 404s, name clashes, session expiry mid-run, reruns). The full run takes about 3 minutes. It never touches your real `.env`, `auth\` or `data\`.
+This runs 34 tests: 28 against a local imitation of Moodle (including the whole `update.py` pipeline on generated `.docx` and PDF files), plus 6 for text extraction on sample documents generated at run time. They cover Boost and Classic themes, the `/moodle` subpath, expired and guest sessions, restricted items, unknown markup, and downloads (embedded viewers, folders, assignments, links, 404s, name clashes, session expiry mid-run, reruns). The full run takes about 3 minutes. It never touches your real `.env`, `auth\` or `data\`.
 
 One test opens a browser window for about 10 seconds. To skip it, run `$env:SKIP_HEADED=1` first.
 

@@ -846,7 +846,12 @@ def print_summary(manifest, sources, entries, counts, missing, text_root, n_pass
     print(f"Open:    {index_html.relative_to(ROOT)}")
 
 
+def add_arguments(parser) -> None:
+    """extract.py's flags (also used by update.py)."""
+    parser.add_argument("--force", action="store_true", help="re-extract every file, even unchanged ones")
+
+
 if __name__ == "__main__":
     parser = base_parser("Extract clean text from the downloaded course files and build index.html.")
-    parser.add_argument("--force", action="store_true", help="re-extract every file, even unchanged ones")
+    add_arguments(parser)
     run(main, parser.parse_args())

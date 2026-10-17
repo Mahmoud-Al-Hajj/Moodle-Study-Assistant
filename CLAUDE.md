@@ -23,6 +23,7 @@ Full spec: PLAN.md. Scraper details (manifest format, folder layout): `.claude/s
 ## Progress
 
 - Done: Step 0, Stage 1 (`login.py`, `check_session.py`), Stage 2 (`scrape.py` crawl and manifest), Stage 3 (`downloader.py`, run by `scrape.py`), Stage 4 (`extract.py`, text extraction + `index.html`; details in `.claude/skills/text-extraction/SKILL.md`).
+- `update.py` (run via `update.bat`) chains: session check, login if expired (only with a terminal), `scrape.main`, `extract.main`, then opens `index.html`. All in one process; each step opens and closes its own Playwright, and only `update.main` goes through `common.run`. Add new flags in `scrape.add_arguments` / `extract.add_arguments`.
 - Next: Stage 5 (`search.py`, `cards.py`, `quiz.py`), built on `data/text/<course>/passages.jsonl`. Only start it when the user says so.
 
 ## Shared helpers

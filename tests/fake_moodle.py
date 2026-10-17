@@ -22,7 +22,7 @@ BASE = "/moodle"
 
 # (path, ?id=) -> fixture file. Course ids: 100 Boost 4.x, 200 Classic 3.x,
 # 300 one-section-per-page, 400 unknown theme, 500 stray links, 700 download
-# edge cases, 999 error page.
+# edge cases, 800 whole update pipeline, 999 error page.
 ROUTES = {
     ("/my/", ""): "dashboard.html",
     ("/course/view.php", "100"): "course_boost.html",
@@ -33,6 +33,7 @@ ROUTES = {
     ("/course/view.php", "400"): "course_custom_theme.html",
     ("/course/view.php", "500"): "course_stray_links.html",
     ("/course/view.php", "700"): "course_downloads.html",
+    ("/course/view.php", "800"): "course_update.html",
     ("/course/view.php", "999"): "error_no_course.html",
     # Activity pages (Stage 3)
     ("/mod/folder/view.php", "12"): "folder_12.html",
@@ -50,9 +51,11 @@ RESOURCE_FILES = {
     "72": "/pluginfile.php/172/mod_resource/content/1/missing.pdf",
     "73": "/pluginfile.php/173/mod_resource/content/1/notes.pdf",
     "74": "/pluginfile.php/174/mod_resource/content/1/notes.pdf",
+    "81": "/pluginfile.php/181/mod_resource/content/1/Nietzsche%20notes.docx",
+    "82": "/pluginfile.php/182/mod_resource/content/1/Human%20rights.pdf",
 }
 # url id -> external target of /mod/url/view.php?id=X&redirect=1
-URL_TARGETS = {"18": "http://example.org/visualgo"}
+URL_TARGETS = {"18": "http://example.org/visualgo", "83": "http://example.org/nietzsche"}
 MISSING_FILES = {"/pluginfile.php/172/mod_resource/content/1/missing.pdf"}
 
 # Shown on the login page when auto_login is on: plays the user typing their credentials.
@@ -65,6 +68,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     requests: list[str] = []
     # pluginfile paths that act as if the session expired (redirect to login)
     expire_files: set[str] = set()
+    # decoded pluginfile path -> real file bytes (tests that need extractable documents set this)
+    real_files: dict[str, bytes] = {}
 
     def log_message(self, *args):
         pass
@@ -123,7 +128,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.redirect("/login/index.php")
         if path in MISSING_FILES:
             return self.status(404)
-        body = f"fake contents of {unquote(path)}".encode("utf-8")
+        body = Handler.real_files.get(unquote(path)) or f"fake contents of {unquote(path)}".encode("utf-8")
         self.send_response(200)
         ctype = "application/pdf" if path.endswith(".pdf") else "application/octet-stream"
         self.send_header("Content-Type", ctype)

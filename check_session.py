@@ -14,8 +14,11 @@ from common import (SessionExpired, base_parser, goto, is_logged_in,
                     load_config, log, new_session_context, run, where)
 
 
-def main(args) -> int:
-    cfg = load_config(require_course=False)
+def check(cfg) -> tuple[bool, str]:
+    """Open the dashboard with the saved session. Returns (logged in?, URL the browser landed on).
+
+    Raises SessionExpired only when there is no usable session file.
+    """
     dashboard = cfg.url("/my/")
     with sync_playwright() as p:
         browser, context = new_session_context(p)
@@ -23,11 +26,14 @@ def main(args) -> int:
             page = context.new_page()
             log.info("Opening %s with the saved session", dashboard)
             goto(page, dashboard)
-            ok = is_logged_in(page, cfg)
-            landed = where(page)
+            return is_logged_in(page, cfg), where(page)
         finally:
             browser.close()
 
+
+def main(args) -> int:
+    cfg = load_config(require_course=False)
+    ok, landed = check(cfg)
     if not ok:
         raise SessionExpired(f"Session is NOT valid (Moodle sent the browser to {landed}). Run:  python login.py")
     log.info("Session is valid: you are logged in to %s", cfg.host)

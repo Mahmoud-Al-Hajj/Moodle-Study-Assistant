@@ -21,8 +21,8 @@ def wait_for_enter(prompt: str) -> None:
         raise KeyboardInterrupt  # no terminal input available: treat as cancel
 
 
-def main(args) -> int:
-    cfg = load_config(require_course=False)
+def interactive_login(cfg) -> None:
+    """Open a visible browser, let the user log in, and save the session to auth/state.json."""
     AUTH_DIR.mkdir(exist_ok=True)
     login_url = cfg.url("/login/index.php")
 
@@ -63,8 +63,11 @@ def main(args) -> int:
         finally:
             if browser.is_connected():
                 browser.close()
-
     log.info("Logged in. Session saved to %s", STATE_FILE.relative_to(ROOT))
+
+
+def main(args) -> int:
+    interactive_login(load_config(require_course=False))
     print("Keep auth/state.json private: it works like a logged-in browser. It is excluded from git.")
     print("Next:  python check_session.py")
     return 0

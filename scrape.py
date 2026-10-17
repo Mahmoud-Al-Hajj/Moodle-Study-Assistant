@@ -448,10 +448,15 @@ def print_download_summary(manifest: dict, results: dict[str, list[dict]]) -> No
         print("Rerun python scrape.py to retry the failed items.")
 
 
-if __name__ == "__main__":
-    parser = base_parser("Crawl a Moodle course, write data/manifest.json and download its material.")
+def add_arguments(parser) -> None:
+    """scrape.py's flags (also used by update.py)."""
     parser.add_argument("--course", help="course id (overrides COURSE_ID in .env)")
     parser.add_argument("--headed", action="store_true", help="show the browser window")
     parser.add_argument("--no-download", action="store_true", help="crawl and write the manifest only")
     parser.add_argument("--save-html", action="store_true", help="save the course page to data/debug/course_page.html")
+
+
+if __name__ == "__main__":
+    parser = base_parser("Crawl a Moodle course, write data/manifest.json and download its material.")
+    add_arguments(parser)
     run(main, parser.parse_args())

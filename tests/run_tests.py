@@ -1,4 +1,4 @@
-"""Tests for Stages 1-4 against a fake Moodle (tests/fake_moodle.py).
+"""Tests for Stages 1-4 and update.py against a fake Moodle (tests/fake_moodle.py).
 
     .venv\\Scripts\\python tests\\run_tests.py            # everything (one test opens a browser window)
     set SKIP_HEADED=1 & .venv\\Scripts\\python tests\\run_tests.py   # skip the visible-browser login test
@@ -21,9 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import fake_moodle  # noqa: E402
 from test_extract import TestExtract  # noqa: E402,F401  (Stage 4 tests run with the rest)
+from test_extract import make_docx, make_pdf  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parents[1]
-SCRIPTS = ["common.py", "moodle_selectors.py", "login.py", "check_session.py", "scrape.py", "downloader.py"]
+SCRIPTS = ["common.py", "moodle_selectors.py", "login.py", "check_session.py", "scrape.py", "downloader.py",
+           "extract.py", "update.py"]
 
 SERVER = None
 SITE = ""
@@ -426,6 +428,79 @@ class TestDownload(Workspace):
         self.assertEqual(self.by_id(self.manifest())["cm:74"]["status"], "downloaded")
         reqs = self.download_requests()
         self.assertFalse([r for r in reqs if "id=71" in r or "id=73" in r], reqs)  # not fetched again
+
+
+class TestUpdate(Workspace):
+    """update.py: session check, crawl, download, extract and viewer in one run (course 800)."""
+
+    DOCX = "/pluginfile.php/181/mod_resource/content/1/Nietzsche notes.docx"
+    PDF = "/pluginfile.php/182/mod_resource/content/1/Human rights.pdf"
+    COURSE = Path("downloads") / "Philosophy 101"
+
+    @classmethod
+    def setUpClass(cls):
+        tmp = Path(tempfile.mkdtemp(prefix="moodle-docs-"))
+        make_docx(tmp / "n.docx")
+        make_pdf(tmp / "h.pdf")
+        fake_moodle.Handler.real_files = {cls.DOCX: (tmp / "n.docx").read_bytes(), cls.PDF: (tmp / "h.pdf").read_bytes()}
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        fake_moodle.Handler.real_files = {}
+
+    def update(self, *args) -> tuple[int, str]:
+        # stdin="" means "no terminal": update.py must never wait for a login there.
+        return self.run_script("update.py", "--course", "800", "--no-open", *args, stdin="")
+
+    def passages(self) -> list[dict]:
+        path = self.dir / "data" / "text" / "Philosophy 101" / "passages.jsonl"
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    def test_full_update_then_rerun(self):
+        code, out = self.update()
+        self.assertEqual(code, 0, out)
+        for n in range(1, 5):
+            self.assertIn(f"Step {n}/4", out)
+        self.assertIn("Session is valid", out)
+        self.assertIn("downloaded now      3", out)
+        self.assertIn("extracted now 2, unchanged 0", out)
+        self.assertIn("Update finished", out)
+        self.assertEqual(self.manifest()["course_id"], "800")  # --course reached scrape.py
+        self.assertTrue((self.dir / self.COURSE / "01-Week 1" / "Nietzsche notes.docx").exists())
+        texts = {}
+        for p in self.passages():
+            texts[p["kind"]] = texts.get(p["kind"], "") + p["text"] + " "
+        self.assertIn("The will to power is defined as the drive to grow.", texts["docx"])
+        self.assertIn("dignity and freedom", texts["pdf"])
+        self.assertIn("http://example.org/nietzsche", texts["link"])
+        index_html = (self.dir / self.COURSE / "index.html").read_text(encoding="utf-8")
+        self.assertIn("Nietzsche notes", index_html)
+
+        fake_moodle.Handler.requests.clear()
+        code, out = self.update()
+        self.assertEqual(code, 0, out)
+        self.assertFalse([r for r in fake_moodle.Handler.requests if "/pluginfile.php/" in r])
+        self.assertIn("already present     3", out)
+        self.assertIn("extracted now 0, unchanged 2", out)
+
+        code, out = self.update("--force")  # flags reach extract.py too
+        self.assertIn("extracted now 2, unchanged 0", out)
+
+    def test_expired_session_without_terminal_stops(self):
+        for cookie in ("stale", None):
+            self.set_cookie(cookie)
+            code, out = self.update()
+            self.assertEqual(code, 2, out)
+            self.assertIn("python login.py", out)
+            self.assertNotIn("Step 2/4", out)
+            self.assertFalse((self.dir / "data" / "manifest.json").exists())
+
+    def test_failed_crawl_stops_before_extract(self):
+        code, out = self.run_script("update.py", "--course", "999", "--no-open", stdin="")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("Step 3/4", out)
+        self.assertFalse((self.dir / "data" / "text").exists())
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ moodle-study/
 ├── moodle_selectors.py        # every selector and URL pattern
 ├── login.py / check_session.py / scrape.py
 ├── downloader.py              # Stage 3 handlers, called by scrape.py
+├── update.py / update.bat     # one command: check session → login if expired → scrape.main → extract.main → open viewer
 └── tests/                     # fake-Moodle tests: python tests/run_tests.py
 ```
 
