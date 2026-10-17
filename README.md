@@ -10,7 +10,7 @@ site's web services API is disabled. See [PLAN.md](PLAN.md) for the full plan.
 
 ```powershell
 cd C:\Users\user\Desktop\moodle-study
-python -m venv .venv                        # already done
+python -m venv .venv                        
 .venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python -m playwright install chromium
 copy .env.example .env                      # then edit .env
