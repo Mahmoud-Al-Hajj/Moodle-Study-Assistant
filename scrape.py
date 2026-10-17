@@ -47,6 +47,8 @@ PARSE_COURSE_JS = r"""
   const sectionIdRe = new RegExp(pat.section_id_attr);
   const sectionLinkRe = new RegExp(pat.section_page_url.replace('{course_id}', courseId));
   const outermost = els => els.filter(el => !els.some(o => o !== el && o.contains(el)));
+  // For priority lists: the first selector that matches anything inside `scope` wins.
+  const firstOf = (scope, list) => list.map(s => scope.querySelector(s)).find(Boolean) || null;
 
   const seenCm = new Set();
   const seenFiles = new Set();
@@ -89,7 +91,7 @@ PARSE_COURSE_JS = r"""
     seenCm.add(cmid);
 
     const holder = el.querySelector(sel.activity_name_attr_holder);
-    const title = cleanText(el.querySelector(sel.activity_name))
+    const title = cleanText(firstOf(el, sel.activity_name))
       || (holder && squash(holder.dataset.activityname)) || cleanText(a) || ('Item ' + cmid);
     const restriction = squash((el.querySelector(sel.restriction_info) || {}).textContent);
     out.push({
@@ -110,7 +112,7 @@ PARSE_COURSE_JS = r"""
     }
     number = parseInt(number, 10);
     if (Number.isNaN(number)) number = idx;
-    return { number, name: cleanText(el.querySelector(sel.section_name)) || el.getAttribute('aria-label') || '' };
+    return { number, name: cleanText(firstOf(el, sel.section_name)) || el.getAttribute('aria-label') || '' };
   };
 
   const sectionEls = outermost(Array.from(root.querySelectorAll(sel.section)));

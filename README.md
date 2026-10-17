@@ -1,93 +1,94 @@
 # Moodle Study Assistant
 
-Personal tool that collects the material from one Moodle course into a local,
-searchable study folder. Uses browser automation (Playwright) because the
-site's web services API is disabled. See [PLAN.md](PLAN.md) for the full plan.
+A personal tool that collects the material from one Moodle course into a local, searchable study folder.
 
-**Status:** Stage 1 (login) and Stage 2 (crawl + manifest) are built.
+- It drives a real browser with Playwright, because the site's web services API is disabled.
+- Everything runs locally and uses no paid services.
+- The full plan is in [PLAN.md](PLAN.md). The rules for Claude are in [CLAUDE.md](CLAUDE.md).
 
-## Setup (once)
+**Status:** Stage 1 (login, session check) and Stage 2 (course crawl → `data/manifest.json`) are done. Downloading is Stage 3.
+
+## Setup (once, in PowerShell)
 
 ```powershell
 cd C:\Users\user\Desktop\moodle-study
-python -m venv .venv                        # already done
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m playwright install chromium
-copy .env.example .env                      # then edit .env
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+copy .env.example .env
+notepad .env
 ```
 
-In `.env`, set:
+In `.env`, keep `MOODLE_URL=https://haigmoodle.haigazian.edu.lb/moodle` and set `COURSE_ID`. That's the number after `?id=` when you open the course in your browser. Your password never goes in `.env`, or anywhere else.
 
-- `MOODLE_URL`: your Moodle site root, e.g. `https://moodle.myuni.edu`
-- `COURSE_ID`: the number after `?id=` when you open the course page
+If PowerShell blocks `Activate.ps1`, skip activation and type `.venv\Scripts\python` instead of `python` in every command below.
 
-Your password never goes in `.env`, or anywhere else.
-
-## Stage 1: log in
+## Stage 1: log in and check the session
 
 ```powershell
-.venv\Scripts\python login.py
+python login.py
 ```
 
-A Chromium window opens on the Moodle login page. Log in as you normally do
-(SSO and 2FA work). The script detects when you're in, saves the session to
-`auth\state.json` and closes the browser.
+1. A Chromium window opens on the Moodle login page. Log in there.
+2. Once your dashboard has loaded, press Enter in the terminal.
+3. The session is saved to `auth\state.json`.
+
+If you press Enter before you're logged in, the script says so and waits for Enter again.
 
 ```powershell
-.venv\Scripts\python login.py --check     # is the saved session still valid?
+python check_session.py
 ```
 
-Moodle sessions expire after a few hours of inactivity (your university sets
-the limit). When that happens, every script tells you to run `login.py` again
-and exits with code 2.
+This prints whether the saved session is still valid. Moodle sessions expire after a few hours. When that happens, every script stops with "Run: python login.py" and exit code 2.
 
-## Stage 2: crawl a course
+## Stage 2: crawl a course (no downloading yet)
 
 ```powershell
-.venv\Scripts\python scrape.py                  # course from .env
-.venv\Scripts\python scrape.py --course 5678    # another course
-.venv\Scripts\python scrape.py --headed         # watch the browser
-.venv\Scripts\python scrape.py --save-html      # keep a copy of the page for debugging
+python scrape.py                  # course from .env
+python scrape.py --course 5678    # another course
+python scrape.py --save-html      # also save the page to data\debug\course_page.html
+python scrape.py --headed         # watch the browser
+python scrape.py --verbose        # detailed logging
 ```
 
-The script prints a per-section summary and writes
-`data\course-<id>\manifest.json`. Each item has: section, title, type
-(`resource`, `folder`, `page`, `url`, `assign`, `inline_file`, ...), URL,
-planned `local_dir`, `local_path` (filled in by Stage 3) and `status`.
+The script walks every section, writes `data\manifest.json`, and prints the total and per-type and per-section counts.
 
-How it finds content:
+**Types** come from each item's URL: `resource` (a file), `folder`, `page`, `url`, `assign`, and `other` for everything else. For `other` items, the `module` field says what they really are: `forum`, `quiz`, or `inline_file` for a file linked straight from a label or section text.
 
-- Reads every section and activity on the course page using markup from Moodle
-  core rather than the theme, so it should work with Boost, Classic and most
-  custom themes.
-- `inline_file`: files linked directly in section summaries, labels or
-  activity descriptions, which are not separate activities.
-- Restricted activities are listed with status `unavailable` and the
-  restriction text in `note`.
-- For courses that show one section per page, it opens each section page.
-- It cross-checks against Moodle's own resource list (`/course/resources.php`)
-  and adds anything the course page missed, with a `note` saying so.
-- It waits 1.5 s between page loads and never sends requests in parallel.
-- Rerunning is safe: download status recorded by Stage 3 is kept.
+**Restricted items** get `status: "unavailable"`, with the restriction text in `note`. Stage 3 skips them.
 
-## Testing stages 1 and 2
+**Rerunning** never duplicates items. It also keeps any progress Stage 3 has recorded.
 
-1. Run `login.py` and log in. Expect "Logged in. Session saved".
-2. Run `login.py --check`. Expect "Saved session is valid."
-3. Run `scrape.py`. Compare the summary with the course page in your browser:
-   - the same sections, in the same order, with sensible names
-   - each section's item count matches what you see (labels are not counted)
-   - item types look right (files show as `resource`, folders as `folder`)
-4. Open `data\course-<id>\manifest.json` and spot-check a few titles and URLs.
-5. Optional: delete `auth\state.json` and run `scrape.py`. It should tell you
-   to run `login.py`.
+**Switching courses** first saves the old manifest as `data\manifest-course-<id>.json`. Crawling that course again picks up where it left off.
 
-If sections or items are missing or wrong, run
-`scrape.py --save-html` and share `data\course-<id>\debug\course-page.html`
-(it contains your name and course content, so share it only with the person
-fixing the tool).
+**If the page doesn't match the selectors**, the script never guesses. It saves the page to `data\debug\course_page.html` and tells you. Share that file, which contains your name and course content, so the selectors in `moodle_selectors.py` can be fixed.
+
+The format of every field is in `.claude/skills/moodle-scraper/SKILL.md`.
+
+## Testing against a fake Moodle
+
+```powershell
+python tests\run_tests.py
+```
+
+This runs 19 tests against a local imitation of Moodle (Boost and Classic themes, `/moodle` subpath, expired and guest sessions, restricted items, unknown markup). It never touches your real `.env`, `auth\` or `data\`.
+
+One test opens a browser window for about 10 seconds. To skip it, run `$env:SKIP_HEADED=1` first.
+
+Rerun the tests after any change to `moodle_selectors.py`.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | OK |
+| 1 | Error, with one clear line explaining it |
+| 2 | Session missing or expired: run `login.py` |
+| 130 | Cancelled with Ctrl+C |
 
 ## Privacy
 
-`.env`, `auth/`, `downloads/` and `data/` are in `.gitignore`.
-`auth\state.json` works like a logged-in browser: don't share it.
+`.env`, `auth/`, `downloads/` and `data/` are excluded from git.
+
+`auth\state.json` works like a logged-in browser, so don't share it.

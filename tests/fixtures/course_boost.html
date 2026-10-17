@@ -6,8 +6,18 @@
 <div class="usermenu"><a href="__BASE__/login/logout.php?sesskey=x">Log out</a></div>
 <div id="page-header"><div class="page-header-headings"><h1 class="h2">Data Structures (CS201)</h1></div></div>
 <div id="region-main"><ul class="topics">
-<li id="section-0" class="section course-section main" data-for="section" data-number="0">
-  <h3 class="sectionname" data-for="section_title"><a href="__BASE__/course/section.php?id=900">General</a></h3>
+<li id="section-0" class="section course-section main clearfix" data-sectionid="0" data-for="section" data-id="900" data-number="0" data-sectionname="General">
+  <!-- Header structure copied from the real Haigazian Moodle (4.x Boost): the outer div also has
+       data-for="section_title" and contains "Collapse all / Expand all". -->
+  <div class="course-section-header d-flex" data-for="section_title" data-id="900" data-number="0">
+    <div class="bulkselect d-none" data-for="sectionBulkSelect"><label class="visually-hidden">Select section General</label></div>
+    <div class="d-flex align-items-center position-relative">
+      <a role="button" data-for="sectiontoggler" href="#coursecontentcollapseid900" aria-label="General"><span class="visually-hidden">Collapse</span></a>
+      <h3 class="h4 sectionname course-content-item" id="sectionid-900-title" data-for="section_title" data-id="900" data-number="0"><a href="__BASE__/course/section.php?id=900">General</a></h3>
+    </div>
+    <div data-region="sectionbadges" class="sectionbadges"></div>
+    <div class="flex-fill d-flex justify-content-end"><a id="collapsesections" class="section-collapsemenu" href="#" role="button" data-toggle="toggleall"><span class="collapseall">Collapse all</span> <span class="expandall">Expand all</span></a></div>
+  </div>
   <div class="summary"><a href="__BASE__/pluginfile.php/1/course/section/900/syllabus.pdf">Syllabus</a></div>
   <ul class="section">
    <li class="activity forum modtype_forum" id="module-10" data-for="cmitem"><div class="activity-item" data-activityname="Announcements"><a class="aalink" href="__BASE__/mod/forum/view.php?id=10"><span class="instancename">Announcements <span class="accesshide"> Forum</span></span></a></div></li>

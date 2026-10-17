@@ -30,10 +30,12 @@ COURSE = {
     "course_title": ".page-header-headings h1, #page-header h1, .page-context-header h1, header h1, h1",
     # One element per section/week. Nested matches (4.5 subsections) are folded into their parent.
     "section": 'li.section, [data-for="section"], .course-section, section[id^="section-"]',
-    "section_name": '.sectionname, [data-for="section_title"], h3, h2, h4',
+    # Priority lists: tried in order, first match wins. (A comma list would return whichever comes
+    # first in the page; in Moodle 4.x that's the whole header bar, including "Collapse all".)
+    "section_name": [".sectionname", 'h3[data-for="section_title"]', "h3", "h2", "h4"],
     # One element per activity (file, folder, forum, label, ...).
     "activity": 'li.activity, [data-for="cmitem"]',
-    "activity_name": '.instancename, .activityname, [data-for="activityname"]',
+    "activity_name": [".instancename", ".activityname", '[data-for="activityname"]'],  # priority list
     "activity_name_attr_holder": "[data-activityname]",  # 4.x stores the name in data-activityname
     "restriction_info": '.availabilityinfo, [data-region="availabilityinfo"]',
     # Text hidden from sighted users (e.g. " File" after a resource name).
