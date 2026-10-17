@@ -13,11 +13,9 @@ A personal tool that collects the material from one Moodle course into a local, 
 ```powershell
 cd C:\Users\user\Desktop\moodle-study
 python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m playwright install chromium
-copy .env.example .env
-notepad .env
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m playwright install chromium
+copy .env.example .env                      # then edit .env
 ```
 
 In `.env`, keep `MOODLE_URL=https://haigmoodle.haigazian.edu.lb/moodle` and set `COURSE_ID`. That's the number after `?id=` when you open the course in your browser. Your password never goes in `.env`, or anywhere else.
@@ -80,12 +78,12 @@ Rerun the tests after any change to `moodle_selectors.py`.
 
 ## Exit codes
 
-| Code | Meaning |
-|---|---|
-| 0 | OK |
-| 1 | Error, with one clear line explaining it |
-| 2 | Session missing or expired: run `login.py` |
-| 130 | Cancelled with Ctrl+C |
+| Code | Meaning                                    |
+| ---- | ------------------------------------------ |
+| 0    | OK                                         |
+| 1    | Error, with one clear line explaining it   |
+| 2    | Session missing or expired: run `login.py` |
+| 130  | Cancelled with Ctrl+C                      |
 
 ## Privacy
 
