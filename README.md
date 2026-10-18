@@ -6,7 +6,7 @@ A personal tool that collects the material from one Moodle course into a local, 
 - Everything runs locally and uses no paid services.
 - The full plan is in [PLAN.md](PLAN.md). The rules for Claude are in [CLAUDE.md](CLAUDE.md).
 
-**Status:** Stages 1-4 are done: login and session check, course crawl to `data/manifest.json`, downloads to `downloads/<course>/`, and text extraction with a browsable `index.html`. `update` runs all of it in one command. A local web UI is being built on top of the same scripts: its Dashboard (session, login, scrape) works now. See [Web UI](#web-ui).
+**Status:** Stages 1-4 are done: login and session check, course crawl to `data/manifest.json`, downloads to `downloads/<course>/`, and text extraction with a browsable `index.html`. `update` runs all of it in one command. A local web UI is being built on top of the same scripts: the Dashboard (session, login, scrape) and the Course content screen work now. See [Web UI](#web-ui).
 
 ## Setup (once, in PowerShell)
 
@@ -117,6 +117,7 @@ The format of every field is in `.claude/skills/moodle-scraper/SKILL.md`.
 ```powershell
 python scrape.py                  # crawl, then download
 python scrape.py --no-download    # manifest only
+python download.py                # download only: what the manifest lists, without crawling again
 ```
 
 `scrape.py` crawls the course, then downloads its material into `downloads\<course>\<NN-section>\`:
@@ -173,7 +174,7 @@ Rerunning `scrape.py` then `extract.py` keeps everything up to date. Files that 
 
 A local web app that drives the same scripts from the browser. It runs them unchanged as background processes, so the terminal commands above keep working and produce the same files.
 
-**Status:** Stage A of A-F. The Dashboard works; the other screens (course content, search, reader, flashcards, quiz, settings) are greyed out in the menu until they're built.
+**Status:** Stages A-B of A-F. The Dashboard and Course content screens work; the others (search, reader, flashcards, quiz, settings) are greyed out in the menu until they're built.
 
 ### Setup (once)
 
@@ -211,12 +212,26 @@ Ctrl+C in that terminal stops both. The two servers are:
 - Only one job runs at a time, so Moodle never gets parallel requests.
 - The sun/moon button switches light and dark mode. It follows your system until you pick one, and remembers your choice. On a phone, the menu moves to the bottom of the screen.
 
+### Course content
+
+Every section of the course, with its items in a table:
+
+- **Each item** shows a type icon, its title, a status chip (Downloaded, Failed, Skipped, Unavailable, Pending) and any note: why it failed, or the restriction on an unavailable item.
+- **Filter** with the search box (titles; case and accents don't matter) and the Type and Status chips. The filters stay in the address, so a reload keeps them. **Expand all** / **Collapse all** open or close every section.
+- **Links** open their real address in a new tab. The arrow button opens any item in Moodle.
+- **Click a file's title** (or the eye button) to preview it in a side panel:
+  - PDFs, pictures, videos and text files show as they are.
+  - Word and PowerPoint files show their extracted text (from `extract.py`), with headings and slide titles. Open the file for its layout and pictures.
+  - **Open in app** opens the file in its usual Windows program (documents and media only, never programs). **Show in folder** opens File Explorer with the file selected. **New tab** shows PDFs and pictures in a full browser tab.
+- **Retry N failed** runs `download.py`: it downloads the failed items again, plus anything new in the list, without re-reading the course page. You get the same progress, log and Cancel as for Scrape.
+
 ### Security
 
 - Both servers listen on **127.0.0.1 only**, so no other computer can reach them.
 - The API only answers requests addressed to `127.0.0.1` or `localhost`, and every request that changes something needs a header the app adds. Other websites open in your browser can't start jobs.
 - Your password never goes through the app. You type it into the Moodle page in the Chromium window, as with `login.py`.
 - `auth\state.json` is never read or served by the API: it only checks that the file exists.
+- The app only shows files from `downloads\`, `data\text\` and `data\converted\`. Everything else (`auth\`, `.env`, `data\ui\`, `data\debug\`) is refused, including tricks like `..` or folder links. Saved Moodle pages are shown with their scripts turned off.
 
 ### Tests
 

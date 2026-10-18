@@ -10,8 +10,8 @@ A local web app on top of the CLI. `api/` (FastAPI) wraps the CLI scripts; `web/
 | Stage | Scope | Status |
 |---|---|---|
 | A | API, app shell, Dashboard (session, login, Scrape) | done |
-| B | Course content: sections, status chips, filters, retry failed, open file/folder | next |
-| C | Download and Extract actions with live progress | |
+| B | Course content: sections, status chips, filters, file preview, open / show in folder, retry failed | done |
+| C | Download and Extract actions with live progress (the `download` job already exists) | next |
 | D | Search + Reader (reuse the `viewer-prototype` branch's image pipeline) | |
 | E | Flashcards + Quiz | |
 | F | Settings, polish, accessibility pass, production mode (FastAPI serves `web/dist`), code-splitting | |
@@ -37,6 +37,13 @@ A local web app on top of the CLI. `api/` (FastAPI) wraps the CLI scripts; `web/
 
 `web/src/api/client.ts` adds the header. In tests, `TestClient` needs `base_url="http://127.0.0.1:8765"`; its default `testserver` host is rejected.
 
+## Files (`api/files.py`)
+
+- **Every browser-supplied path** goes through `resolve_served(root, rel)`: a relative POSIX path (no `\`, `:`, NUL, leading `/`, empty/`.`/`..` segments), resolved (junctions and symlinks followed), and inside one of `SERVED_DIRS` = `downloads/`, `data/text/`, `data/converted/`. Anything else raises `NotServed` → 404 with the same message, so nothing leaks about what exists. `auth/`, `.env`, `data/ui/` and `data/debug/` (saved Moodle pages hold the sesskey) are never reachable.
+- **Headers:** `nosniff` on everything; `Content-Security-Policy: sandbox` on everything except PDFs (Chrome refuses to show sandboxed PDFs). The sandbox stops a saved Moodle `.html` page from running script in the app's origin, where it could call the API. The web app also renders `.html` in `<iframe sandbox="">`.
+- **Content types** come from the explicit `CONTENT_TYPES` map, not `mimetypes` (Windows' registry varies).
+- **Open in app** (`os.startfile`) only for extensions in `OPENABLE` (documents and media); executables and scripts get 400 "Use Show in folder". **Show in folder** runs `explorer /select, <path>` for any served file. The path check always runs first, so a path outside the allowed folders is 404, never 400. Both are Windows-only (`desktop_supported()`); tests monkeypatch `open_with_default_app`, `show_in_folder` and `desktop_supported`.
+
 ## Endpoints
 
 | Method + path | Returns | Notes |
@@ -46,8 +53,12 @@ A local web app on top of the CLI. `api/` (FastAPI) wraps the CLI scripts; `web/
 | `POST /api/session/check` | 202 `Job` | runs `check_session.py` |
 | `POST /api/session/login` | 202 `Job` | runs `login.py` (15 min timeout) |
 | `GET /api/course` | `CourseSummary` | for `COURSE_ID` in `.env`; `scraped: false` when the manifest is missing or for another course |
+| `GET /api/course/items` | `CourseContent` | sections → items → files (`path`, `exists`, `size`, `text_path` from Stage 4's `extract_state.json`, `flags`, `openable`). Links get no files (their content is `target_url`, not the shared `links.md`). |
+| `GET /api/files/{path}` | the file | see Files above; `inline` disposition |
+| `POST /api/files/open` `{path}` | `{ok}` | default Windows app; documents and media only |
+| `POST /api/files/reveal` `{path}` | `{ok}` | Explorer with the file selected |
 | `GET /api/runs` | `Runs` | last run per action (`scrape`, `download`, `extract`) |
-| `POST /api/jobs` `{action}` | 202 `Job` | 400 if `.env` isn't configured, 409 if busy, 422 for unknown actions |
+| `POST /api/jobs` `{action: scrape\|download}` | 202 `Job` | 400 if `.env` isn't configured, 409 if busy, 422 for unknown actions |
 | `GET /api/jobs/current` | `Job` or `null` | lets the app pick up a running job after reload |
 | `GET /api/jobs/{id}?after=N` | `Job` | only lines with `seq > N`; `next` is the cursor for the next poll |
 | `POST /api/jobs/{id}/cancel` | `Job` | kills the process tree |
@@ -57,6 +68,7 @@ The app polls the job every second while it runs (no SSE).
 
 ## Jobs (`api/jobs.py`)
 
+- **Actions:** `scrape` (`scrape.py --no-download`), `download` (`download.py`: manifest only, no crawl; fetches failed + pending items, as the downloader has no per-item mode), `check_session`, `login`.
 - `ACTIONS` maps an action to `(script + args, UI label, timeout)`. To add one: extend `ACTIONS`, the `JobAction`/`StartJob` literals in `models.py`, and `on_finish` in `main.py` if it records a run. Then regenerate the schema.
 - **Lines:** `parse_line` splits `HH:MM:SS LEVEL message` into `info`/`warning`/`error`; anything else is `output`. Text in front of a timestamp becomes its own `output` line (`login.py`'s prompt has no newline). The last 5000 lines are kept.
 - **Progress:** `parse_progress` reads `[n/m] item` (downloader and extractor format) into `{done, total, item}`.
@@ -78,8 +90,8 @@ The app polls the job every second while it runs (no SSE).
 
 | File | Written by | Content |
 |---|---|---|
-| `runs.json` | `on_finish` | `{action: RunInfo}`: state, started/finished, message, counts (`items` + counts by status) |
-| `session.json` | `on_finish` for check_session, login and scrape | `{status: valid|expired, checked_at, message}`. Exit 0 → valid, exit 2 → expired. |
+| `runs.json` | `on_finish` for scrape and download | `{action: RunInfo}`: state, started/finished, message, counts (`items` + counts by status) |
+| `session.json` | `on_finish` | `{status, checked_at, message}`, status `valid` or `expired`. Exit 2 of any job → expired; exit 0 of check_session, login or scrape → valid. A download that had nothing to do never contacted Moodle, so it proves nothing. |
 
 Written atomically (`.tmp` then `replace`) by `api/store.py`. `Store` reads `.env`, the manifest and these files relative to the root it's given, so tests use a temp root.
 
@@ -89,7 +101,8 @@ Written atomically (`.tmp` then `replace`) by `api/store.py`. `Store` reads `.en
 api/
 ├── main.py            # create_app(root): middleware, error handlers, routes, on_finish
 ├── jobs.py            # ACTIONS, JobManager, parse_line/parse_progress, kill_tree
-├── store.py           # .env, manifest summary, data/ui/*.json
+├── store.py           # .env, manifest summary + course items, data/ui/*.json
+├── files.py           # resolve_served, content types, headers, open / show in folder
 ├── models.py          # Pydantic models → openapi.json → web/src/api/schema.ts
 └── export_openapi.py  # python -m api.export_openapi
 web/src/
@@ -97,11 +110,16 @@ web/src/
 │                      # ActiveJob.tsx (the one active job, shared by all cards), schema.ts + openapi.json (generated)
 ├── components/        # AppLayout (drawer / bottom nav), JobPanel, StatusChip, states, ConfirmDialog,
 │                      # SnackbarProvider, PageHeader, Stat, format.ts
-├── features/<screen>/ # one folder per screen; dashboard/ so far
+├── features/<screen>/ # one folder per screen: dashboard/, course/ (CoursePage, FilterBar, SectionList,
+│                      # ItemRow, ItemIcon, FilePreview, filters.ts, extracted.ts)
 ├── theme/             # theme.ts (all tokens, light/dark, reduced motion), ColorModeToggle
 └── test/              # render.tsx (providers for tests), setup.ts
 dev.py / dev.bat       # starts both servers; .\dev
 ```
+
+- **Course filters** live in React state and are mirrored to the URL (`?q=&type=&status=`). Don't read them back from `useSearchParams` on each render: React Router updates the URL in a transition, which loses fast keystrokes.
+- **Text preview** shows Stage 4's `.md` as plain text: `extractedBody` drops its header (title, metadata table, `> flag` lines) and `**` markers; `#` lines render as headings. It depends on the `.md` format in the text-extraction skill. Stage D's Reader replaces it with real Markdown rendering.
+- File URLs: `fileUrl(path)` encodes each segment. Paths always come from the API, never from user input.
 
 Reuse `JobPanel` (progress, current item, collapsible live log, Cancel) for every long job, and `StatusChip` for every status.
 

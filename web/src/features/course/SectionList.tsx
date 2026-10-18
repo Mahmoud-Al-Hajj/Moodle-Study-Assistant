@@ -88,8 +88,15 @@ export function SectionList({
                         Type
                       </TableCell>
                       <TableCell>Title</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right" />
+                      <TableCell
+                        sx={{ width: (t) => t.layout.statusColumnWidth }}
+                      >
+                        Status
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{ width: (t) => t.layout.actionsColumnWidth }}
+                      />
                       {/* the action buttons carry their own labels */}
                     </TableRow>
                   </TableHead>

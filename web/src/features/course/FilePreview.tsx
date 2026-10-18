@@ -22,6 +22,7 @@ import { useFileText, useOpenFile, useRevealFile } from "../../api/queries";
 import { useNotify } from "../../components/SnackbarProvider";
 import { EmptyState, ErrorState } from "../../components/states";
 import { formatBytes } from "../../components/format";
+import { extractedBody } from "./extracted";
 
 const IMAGE = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
 const VIDEO = ["mp4", "webm", "mov"];
@@ -44,7 +45,15 @@ const FLAG_TEXT: Record<string, string> = {
   no_text: "Videos, audio and images have no text to extract.",
 };
 
-function TextPreview({ path, label }: { path: string; label?: string }) {
+function TextPreview({
+  path,
+  label,
+  extracted = false,
+}: {
+  path: string;
+  label?: string;
+  extracted?: boolean;
+}) {
   const text = useFileText(path);
   if (text.isPending)
     return (
@@ -63,13 +72,31 @@ function TextPreview({ path, label }: { path: string; label?: string }) {
           {label}
         </Typography>
       )}
-      <Typography
-        component="div"
-        variant="body2"
-        sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
-      >
-        {text.data}
-      </Typography>
+      <Box sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        {(extracted ? extractedBody(text.data) : text.data)
+          .split("\n")
+          .map((line, i) =>
+            extracted && line.startsWith("#") ? (
+              <Typography
+                key={i}
+                variant="subtitle1"
+                component="p"
+                sx={{ mt: i ? 2 : 0 }}
+              >
+                {line.replace(/^#+\s*/, "")}
+              </Typography>
+            ) : (
+              <Typography
+                key={i}
+                variant="body2"
+                component="p"
+                sx={{ "&:empty": { height: (t) => t.spacing(1) } }}
+              >
+                {line}
+              </Typography>
+            ),
+          )}
+      </Box>
     </>
   );
 }
@@ -120,6 +147,7 @@ function FileBody({ file }: { file: ItemFile }) {
     return (
       <TextPreview
         path={file.text_path}
+        extracted
         label="Extracted text: open the file for its layout and pictures"
       />
     );
@@ -132,7 +160,7 @@ function FileBody({ file }: { file: ItemFile }) {
   );
 }
 
-/** Side panel previewing an item's files, with open / show in folder / download. */
+/** Side panel previewing an item's files, with Open in app / Show in folder / New tab. */
 export function FilePreview({
   item,
   onClose,
@@ -166,11 +194,11 @@ export function FilePreview({
       onClose={onClose}
       slotProps={{
         paper: {
-          sx: {
-            width: { xs: 1, md: (t) => t.layout.previewWidth },
+          sx: (t) => ({
+            width: { xs: 1, md: t.layout.previewWidth },
             display: "flex",
             flexDirection: "column",
-          },
+          }),
           "aria-labelledby": "preview-title",
         },
       }}

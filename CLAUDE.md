@@ -24,7 +24,8 @@ Full spec: PLAN.md (CLI). Web UI: `.claude/skills/web-ui/SKILL.md`. Scraper deta
 
 - Done: Step 0, Stage 1 (`login.py`, `check_session.py`), Stage 2 (`scrape.py` crawl and manifest), Stage 3 (`downloader.py`, run by `scrape.py`), Stage 4 (`extract.py`, text extraction + `index.html`; details in `.claude/skills/text-extraction/SKILL.md`).
 - `update.py` (run via `update.bat`) chains: session check, login if expired (only with a terminal), `scrape.main`, `extract.main`, then opens `index.html`. All in one process; each step opens and closes its own Playwright, and only `update.main` goes through `common.run`. Add new flags in `scrape.add_arguments` / `extract.add_arguments`.
-- Web UI (stages A-F, review stop after each): Stage A done (API + app shell + Dashboard with session, login and Scrape). Next: Stage B (Course content). Only start a stage when the user says so.
+- `download.py`: Stage 3 alone (manifest → `downloader.download_all`, no crawl). Used by the web UI's Retry failed / Download.
+- Web UI (stages A-F, review stop after each): A done (API, app shell, Dashboard with session, login and Scrape), B done (Course content: sections, filters, file preview, open / show in folder, retry failed). Next: Stage C (Download and Extract actions). Only start a stage when the user says so.
 - PLAN.md's CLI Stage 5 (`search.py`, `cards.py`, `quiz.py`) is superseded by web stages D-E. Ask the user before building a CLI version.
 
 ## Web UI (`api/` + `web/`)
@@ -34,6 +35,7 @@ Endpoints, job states, security middleware, `data/ui/` files, layout and test co
 - **The API runs the CLI scripts as child processes** (`api/jobs.py`). Leave CLI logic as it is; the UI gets progress from log lines and outcomes from exit codes.
 - `api/` imports no Playwright and never opens `auth/state.json` (only `exists()`). The password never passes through the UI.
 - Bind to 127.0.0.1 only. One job at a time (409 otherwise).
+- Every browser-supplied path goes through `api/files.resolve_served` (only `downloads/`, `data/text/`, `data/converted/`). "Open in app" is limited to the document/media allow-list in `api/files.OPENABLE`.
 - After any change to `api/models.py` or a route: `python -m api.export_openapi`, then `cd web; npm run gen:api`. A drift test enforces it.
 - Colours, sizes and spacing come from `web/src/theme/theme.ts` tokens only.
 

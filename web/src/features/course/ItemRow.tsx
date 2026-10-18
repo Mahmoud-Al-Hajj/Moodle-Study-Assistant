@@ -72,6 +72,14 @@ export function ItemRow({
             variant="caption"
             component="p"
             color={item.status === "failed" ? "error" : "text.secondary"}
+            title={item.note || undefined}
+            sx={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              wordBreak: "break-all",
+            }}
           >
             {[
               link && hostname(link),

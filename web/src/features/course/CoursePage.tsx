@@ -82,8 +82,13 @@ function DownloadJob() {
 export function CoursePage() {
   const content = useCourseItems();
   const [params, setParams] = useSearchParams();
-  const filters = parseFilters(params);
-  const setFilters = (f: Filters) => setParams(toParams(f), { replace: true });
+  // State is the source of truth; the URL only mirrors it (React Router updates the URL in a
+  // transition, so reading filters back from it would lose fast keystrokes).
+  const [filters, setFilterState] = useState(() => parseFilters(params));
+  const setFilters = (f: Filters) => {
+    setFilterState(f);
+    setParams(toParams(f), { replace: true });
+  };
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [previewId, setPreviewId] = useState<string | null>(null);
 
