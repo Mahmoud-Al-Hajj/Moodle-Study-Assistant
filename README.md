@@ -6,7 +6,7 @@ A personal tool that collects the material from one Moodle course into a local, 
 - Everything runs locally and uses no paid services.
 - The full plan is in [PLAN.md](PLAN.md). The rules for Claude are in [CLAUDE.md](CLAUDE.md).
 
-**Status:** Stages 1-4 are done: login and session check, course crawl to `data/manifest.json`, downloads to `downloads/<course>/`, and text extraction with a browsable `index.html`. `update` runs all of it in one command. Stage 5 (search, flashcards, quiz) is next.
+**Status:** Stages 1-4 are done: login and session check, course crawl to `data/manifest.json`, downloads to `downloads/<course>/`, and text extraction with a browsable `index.html`. `update` runs all of it in one command. A local web UI is being built on top of the same scripts: its Dashboard (session, login, scrape) works now. See [Web UI](#web-ui).
 
 ## Setup (once, in PowerShell)
 
@@ -169,6 +169,65 @@ start "downloads\<course>\index.html"
 
 Rerunning `scrape.py` then `extract.py` keeps everything up to date. Files that haven't changed are skipped, so a rerun takes under a second.
 
+## Web UI
+
+A local web app that drives the same scripts from the browser. It runs them unchanged as background processes, so the terminal commands above keep working and produce the same files.
+
+**Status:** Stage A of A-F. The Dashboard works; the other screens (course content, search, reader, flashcards, quiz, settings) are greyed out in the menu until they're built.
+
+### Setup (once)
+
+You need [Node.js](https://nodejs.org) LTS as well as the Python setup above.
+
+```powershell
+cd C:\Users\user\Desktop\moodle-study
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+cd web
+npm install
+cd ..
+```
+
+npm may warn about esbuild's install script (`allowScripts`). The app still works.
+
+### Run it
+
+```powershell
+.\dev              # starts the API and the app, then opens http://127.0.0.1:5173
+.\dev --no-open    # same, without opening the browser
+```
+
+Ctrl+C in that terminal stops both. The two servers are:
+
+- **API:** http://127.0.0.1:8765
+- **App:** http://127.0.0.1:5173
+
+### The Dashboard
+
+- **Session:** checked automatically when the page opens, then shows *Logged in*, *Session expired* or *Not logged in*.
+  - **Log in to Moodle** opens the same visible Chromium window as `login.py`. Log in there, then click **I'm logged in** in the app (it presses Enter for you).
+  - **Check now** checks the session again.
+- **Course:** name, id, last crawl time, and item counts by status (found, downloaded, failed, unavailable, pending).
+- **Scrape course:** runs `scrape.py --no-download`. If the course was already scraped, it asks first; progress is always kept. While it runs you get a progress bar, a live log you can expand, and **Cancel**. Afterwards the card shows the last run time and counts.
+- Only one job runs at a time, so Moodle never gets parallel requests.
+- The sun/moon button switches light and dark mode. It follows your system until you pick one, and remembers your choice. On a phone, the menu moves to the bottom of the screen.
+
+### Security
+
+- Both servers listen on **127.0.0.1 only**, so no other computer can reach them.
+- The API only answers requests addressed to `127.0.0.1` or `localhost`, and every request that changes something needs a header the app adds. Other websites open in your browser can't start jobs.
+- Your password never goes through the app. You type it into the Moodle page in the Chromium window, as with `login.py`.
+- `auth\state.json` is never read or served by the API: it only checks that the file exists.
+
+### Tests
+
+```powershell
+.venv\Scripts\python -m pytest tests\test_api.py    # API against the fake Moodle; $env:SKIP_HEADED=1 skips the browser test
+cd web
+npm test           # screen and component tests
+npm run lint       # ESLint + Prettier
+npm run build      # type check + production build
+```
+
 ## Testing against a fake Moodle
 
 ```powershell
@@ -192,6 +251,6 @@ Rerun the tests after any change to `moodle_selectors.py`.
 
 ## Privacy
 
-`.env`, `auth/`, `downloads/` and `data/` are excluded from git.
+`.env`, `auth/`, `downloads/` and `data/` (including the web UI's own `data\ui\`) are excluded from git.
 
 `auth\state.json` works like a logged-in browser, so don't share it.

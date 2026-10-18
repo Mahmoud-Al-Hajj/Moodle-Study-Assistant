@@ -1,0 +1,5 @@
+# Development and tests:  .venv\Scripts\python -m pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=8
+httpx>=0.27
+pyflakes>=3

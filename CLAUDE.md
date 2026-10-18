@@ -1,6 +1,6 @@
 # Moodle Study Assistant: rules for Claude
 
-Full spec: PLAN.md. Scraper details (manifest format, folder layout): `.claude/skills/moodle-scraper/SKILL.md`.
+Full spec: PLAN.md (CLI). Web UI: `.claude/skills/web-ui/SKILL.md`. Scraper details (manifest format, folder layout): `.claude/skills/moodle-scraper/SKILL.md`.
 
 - **Never ask for, read, store, or log the Moodle password.** Authentication is a manual login in a visible browser (`login.py`), saved with Playwright `storage_state` to `auth/state.json`.
 - **Build every URL from `MOODLE_URL` in `.env`.** Never hardcode the domain (the site lives under a `/moodle` subpath).
@@ -24,7 +24,18 @@ Full spec: PLAN.md. Scraper details (manifest format, folder layout): `.claude/s
 
 - Done: Step 0, Stage 1 (`login.py`, `check_session.py`), Stage 2 (`scrape.py` crawl and manifest), Stage 3 (`downloader.py`, run by `scrape.py`), Stage 4 (`extract.py`, text extraction + `index.html`; details in `.claude/skills/text-extraction/SKILL.md`).
 - `update.py` (run via `update.bat`) chains: session check, login if expired (only with a terminal), `scrape.main`, `extract.main`, then opens `index.html`. All in one process; each step opens and closes its own Playwright, and only `update.main` goes through `common.run`. Add new flags in `scrape.add_arguments` / `extract.add_arguments`.
-- Next: Stage 5 (`search.py`, `cards.py`, `quiz.py`), built on `data/text/<course>/passages.jsonl`. Only start it when the user says so.
+- Web UI (stages A-F, review stop after each): Stage A done (API + app shell + Dashboard with session, login and Scrape). Next: Stage B (Course content). Only start a stage when the user says so.
+- PLAN.md's CLI Stage 5 (`search.py`, `cards.py`, `quiz.py`) is superseded by web stages D-E. Ask the user before building a CLI version.
+
+## Web UI (`api/` + `web/`)
+
+Endpoints, job states, security middleware, `data/ui/` files, layout and test commands: `.claude/skills/web-ui/SKILL.md`. Load it before touching `api/`, `web/` or `dev.py`.
+
+- **The API runs the CLI scripts as child processes** (`api/jobs.py`). Leave CLI logic as it is; the UI gets progress from log lines and outcomes from exit codes.
+- `api/` imports no Playwright and never opens `auth/state.json` (only `exists()`). The password never passes through the UI.
+- Bind to 127.0.0.1 only. One job at a time (409 otherwise).
+- After any change to `api/models.py` or a route: `python -m api.export_openapi`, then `cd web; npm run gen:api`. A drift test enforces it.
+- Colours, sizes and spacing come from `web/src/theme/theme.ts` tokens only.
 
 ## Shared helpers
 
