@@ -10,6 +10,8 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
+from .files import openable
+
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -23,6 +25,7 @@ class Store:
         self.runs_file = self.ui_dir / "runs.json"
         self.session_file = self.ui_dir / "session.json"
         self.state_file = root / "auth" / "state.json"
+        self._extract_cache: tuple[tuple | None, dict[str, dict]] = (None, {})
 
     # --- the CLI's files (read only) ---
 
@@ -57,6 +60,65 @@ class Store:
             "by_status": dict(Counter(it.get("status", "") for it in items)),
             "by_type": dict(Counter(it.get("type", "") for it in items)),
         }
+
+    def course_items(self) -> dict:
+        """Sections with their items and each item's files on disk, for the Course content screen."""
+        summary = self.course_summary()
+        base = {"scraped": summary["scraped"], "course_id": summary["course_id"], "name": summary["name"],
+                "crawled_at": summary["crawled_at"], "sections": []}
+        if not summary["scraped"]:
+            return base
+        manifest = self.manifest() or {}
+        items = manifest.get("items", [])
+        extracted = self._extracted(items)
+        by_section: dict[int, list[dict]] = {}
+        for it in items:
+            by_section.setdefault(it["section_number"], []).append(self._item(it, extracted))
+        sections = [(s["section_number"], s["section_name"]) for s in manifest.get("sections", [])]
+        for number in by_section.keys() - {n for n, _ in sections}:  # an item's section missing from the list
+            sections.append((number, by_section[number][0]["section_name"]))
+        base["sections"] = [{"number": n, "name": name, "items": by_section.get(n, [])}
+                            for n, name in sorted(sections)]
+        return base
+
+    def _item(self, it: dict, extracted: dict[str, dict]) -> dict:
+        # Links share one generated links.md: their content is target_url, not a file.
+        paths = [] if it.get("type") == "url" else (it.get("files") or [it.get("local_path")])
+        files = []
+        for p in dict.fromkeys(p for p in paths if p):
+            path = self.root / p
+            if path.is_dir():
+                continue
+            text = extracted.get(p, {})
+            output = text.get("output") or None
+            files.append({
+                "path": p, "name": path.name, "ext": path.suffix.lower().lstrip("."),
+                "size": path.stat().st_size if path.is_file() else None, "exists": path.is_file(),
+                "text_path": output if output and (self.root / output).is_file() else None,
+                "flags": text.get("flags", []), "openable": openable(p),
+            })
+        return {
+            "id": it["id"], "title": it["title"], "type": it.get("type", "other"), "module": it.get("module", ""),
+            "status": it.get("status", ""), "note": it.get("note", ""), "url": it.get("url", ""),
+            "target_url": it.get("target_url", ""), "section_name": it.get("section_name", ""), "files": files,
+        }
+
+    def _extracted(self, items: list[dict]) -> dict[str, dict]:
+        """Stage 4's per-source record (output .md, flags) from data/text/<course>/extract_state.json."""
+        paths = (it.get("local_path") or "" for it in items)
+        course = next((p.split("/")[1] for p in paths if p.startswith("downloads/") and p.count("/") >= 2), None)
+        if not course:
+            return {}
+        state_file = self.root / "data" / "text" / course / "extract_state.json"
+        try:
+            mtime = state_file.stat().st_mtime_ns
+        except OSError:
+            return {}
+        if self._extract_cache[0] != (state_file, mtime):  # ~1 MB with full text: parse only when it changes
+            sources = self._read(state_file).get("sources", {})
+            self._extract_cache = ((state_file, mtime), {k: {"output": v.get("output", ""), "flags": v.get("flags", [])}
+                                                          for k, v in sources.items()})
+        return self._extract_cache[1]
 
     # --- the UI's own state (data/ui/, git-ignored with the rest of data/) ---
 

@@ -9,6 +9,7 @@ import { ActiveJobProvider } from "./api/ActiveJob";
 import { AppLayout } from "./components/AppLayout";
 import { EmptyState } from "./components/states";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { CoursePage } from "./features/course/CoursePage";
 
 export const newQueryClient = () =>
   new QueryClient({
@@ -55,6 +56,7 @@ export function AppRoutes() {
     <AppLayout>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/course" element={<CoursePage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>

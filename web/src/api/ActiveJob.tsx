@@ -15,6 +15,7 @@ type ActiveJob = {
   job: Job | undefined;
   start: {
     scrape: () => void;
+    download: () => void;
     checkSession: () => void;
     login: () => void;
   };
@@ -61,14 +62,20 @@ export function ActiveJobProvider({ children }: { children: ReactNode }) {
     onStarted,
     onError,
   );
+  const download = useJobMutation(
+    () => api.startJob("download"),
+    onStarted,
+    onError,
+  );
   const check = useJobMutation(api.checkSession, onStarted, onError);
   const login = useJobMutation(api.login, onStarted, onError);
-  const starting = [scrape, check, login].some((m) => m.isPending);
+  const starting = [scrape, download, check, login].some((m) => m.isPending);
 
   const value: ActiveJob = {
     job: job.data,
     start: {
       scrape: () => scrape.mutate(undefined),
+      download: () => download.mutate(undefined),
       checkSession: () => check.mutate(undefined),
       login: () => login.mutate(undefined),
     },

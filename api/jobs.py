@@ -20,6 +20,7 @@ from .store import now
 # action -> (script and arguments, label shown in the UI, timeout in seconds or None)
 ACTIONS: dict[str, tuple[list[str], str, int | None]] = {
     "scrape": (["scrape.py", "--no-download"], "Scrape course", None),
+    "download": (["download.py"], "Download files", None),
     "check_session": (["check_session.py"], "Check session", 180),
     "login": (["login.py"], "Log in to Moodle", 15 * 60),
 }

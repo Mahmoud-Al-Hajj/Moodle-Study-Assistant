@@ -4,6 +4,8 @@ import { api, type Job } from "./client";
 export const keys = {
   session: ["session"] as const,
   course: ["course"] as const,
+  courseItems: ["course", "items"] as const,
+  fileText: (path: string) => ["file-text", path] as const,
   runs: ["runs"] as const,
   currentJob: ["job", "current"] as const,
   job: (id: string | null) => ["job", id] as const,
@@ -15,6 +17,14 @@ export const useSession = () =>
   useQuery({ queryKey: keys.session, queryFn: api.session });
 export const useCourse = () =>
   useQuery({ queryKey: keys.course, queryFn: api.course });
+export const useCourseItems = () =>
+  useQuery({ queryKey: keys.courseItems, queryFn: api.courseItems });
+export const useFileText = (path: string | null) =>
+  useQuery({
+    queryKey: keys.fileText(path ?? ""),
+    queryFn: () => api.fileText(path as string),
+    enabled: path !== null,
+  });
 export const useRuns = () =>
   useQuery({ queryKey: keys.runs, queryFn: api.runs });
 export const useCurrentJob = () =>
@@ -62,4 +72,12 @@ export function useCancelJob() {
 
 export function usePressEnter() {
   return useMutation({ mutationFn: (id: string) => api.pressEnter(id) });
+}
+
+export function useOpenFile() {
+  return useMutation({ mutationFn: (path: string) => api.openFile(path) });
+}
+
+export function useRevealFile() {
+  return useMutation({ mutationFn: (path: string) => api.revealFile(path) });
 }

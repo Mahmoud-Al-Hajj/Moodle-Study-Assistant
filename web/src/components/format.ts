@@ -24,3 +24,16 @@ export function timeAgo(
 }
 
 export const fullDate = (iso: string) => new Date(iso).toLocaleString();
+
+/** "1.2 MB", "340 KB"... */
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined) return "";
+  const units = ["bytes", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 ? value : value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}

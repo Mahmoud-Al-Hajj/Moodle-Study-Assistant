@@ -11,6 +11,7 @@ declare module "@mui/material/styles" {
       readableWidth: number;
       logMaxHeight: number;
       illustrationSize: number;
+      previewWidth: number;
     };
   }
   interface ThemeOptions {
@@ -74,6 +75,7 @@ export const theme = createTheme({
     readableWidth: 440,
     logMaxHeight: 280,
     illustrationSize: 44,
+    previewWidth: 760,
   },
   shape: { borderRadius: 10 },
   spacing: 8,

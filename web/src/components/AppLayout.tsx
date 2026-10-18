@@ -34,7 +34,6 @@ export const NAV = [
     to: "/course",
     label: "Course content",
     icon: <FolderOpenOutlined />,
-    stage: "B",
   },
   { to: "/search", label: "Search", icon: <SearchRounded />, stage: "D" },
   { to: "/reader", label: "Reader", icon: <MenuBookOutlined />, stage: "D" },

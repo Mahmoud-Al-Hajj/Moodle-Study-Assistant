@@ -14,9 +14,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
-from . import models
+from . import files, models
 from .jobs import Busy, Job, JobManager
 from .store import Store, now
 
@@ -34,17 +34,17 @@ def create_app(root: Path = ROOT) -> FastAPI:
     store = Store(root)
 
     def on_finish(job: Job, state: str) -> None:
-        if job.action in ("check_session", "login", "scrape"):
-            if state == "succeeded":
-                store.set_session("valid", "You are logged in.")
-            elif state == "session_expired":
-                store.set_session("expired", "Your session has expired. Log in again.")
-        if job.action == "scrape":
+        # A download with nothing to do never contacts Moodle, so only these prove the session works.
+        if state == "succeeded" and job.action in ("check_session", "login", "scrape"):
+            store.set_session("valid", "You are logged in.")
+        elif state == "session_expired":
+            store.set_session("expired", "Your session has expired. Log in again.")
+        if job.action in ("scrape", "download"):
             course = store.course_summary()
             counts = {"items": course["items"], **course["by_status"]}
-            store.record_run("scrape", {"action": "scrape", "state": state, "started_at": job.started_at,
-                                        "finished_at": job.finished_at or now(), "message": job.message,
-                                        "counts": counts if state == "succeeded" else {}})
+            store.record_run(job.action, {"action": job.action, "state": state, "started_at": job.started_at,
+                                          "finished_at": job.finished_at or now(), "message": job.message,
+                                          "counts": counts if state == "succeeded" else {}})
 
     jobs = JobManager(root, on_finish)
 
@@ -90,7 +90,7 @@ def create_app(root: Path = ROOT) -> FastAPI:
             raise HTTPException(404, "That job doesn't exist (the server may have restarted).")
         return job
 
-    @app.get("/api/health", response_model=models.Health)
+    @app.get("/api/health", response_model=models.Ok)
     def health():
         return {"ok": True}
 
@@ -109,6 +109,43 @@ def create_app(root: Path = ROOT) -> FastAPI:
     @app.get("/api/course", response_model=models.CourseSummary)
     def course():
         return store.course_summary()
+
+    @app.get("/api/course/items", response_model=models.CourseContent)
+    def course_items():
+        return store.course_items()
+
+    def served(path: str) -> Path:
+        try:
+            return files.resolve_served(root, path)
+        except files.NotServed:
+            raise HTTPException(404, "That file isn't available. It may have been moved or deleted.")
+
+    @app.get("/api/files/{path:path}", responses={404: {"model": models.ErrorBody}},
+             response_class=FileResponse)
+    def get_file(path: str):
+        target = served(path)
+        return FileResponse(target, media_type=files.content_type(target), filename=target.name,
+                            content_disposition_type="inline", headers=files.response_headers(target))
+
+    def desktop(body: models.FileRequest, action, documents_only: bool = False) -> dict:
+        target = served(body.path)
+        if documents_only and not files.openable(target):
+            raise HTTPException(400, "For safety, only documents and media open from here. Use Show in folder.")
+        if not files.desktop_supported():
+            raise HTTPException(400, "Opening files from the app only works on Windows.")
+        try:
+            action(target)
+        except OSError as e:
+            raise HTTPException(400, f"Windows couldn't open it: {e.strerror or e}")
+        return {"ok": True}
+
+    @app.post("/api/files/open", response_model=models.Ok, responses=ERRORS)
+    def open_file(body: models.FileRequest):
+        return desktop(body, files.open_with_default_app, documents_only=True)
+
+    @app.post("/api/files/reveal", response_model=models.Ok, responses=ERRORS)
+    def reveal_file(body: models.FileRequest):
+        return desktop(body, files.show_in_folder)
 
     @app.get("/api/runs", response_model=models.Runs)
     def runs():

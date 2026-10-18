@@ -89,6 +89,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/course/items": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Course Items */
+    get: operations["course_items_api_course_items_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/files/{path}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get File */
+    get: operations["get_file_api_files__path__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/files/open": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Open File */
+    post: operations["open_file_api_files_open_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/files/reveal": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reveal File */
+    post: operations["reveal_file_api_files_reveal_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/runs": {
     parameters: {
       query?: never;
@@ -195,6 +263,51 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** CourseContent */
+    CourseContent: {
+      /** Scraped */
+      scraped: boolean;
+      /** Course Id */
+      course_id: string | null;
+      /** Name */
+      name: string | null;
+      /** Crawled At */
+      crawled_at: string | null;
+      /** Sections */
+      sections: components["schemas"]["CourseSection"][];
+    };
+    /** CourseItem */
+    CourseItem: {
+      /** Id */
+      id: string;
+      /** Title */
+      title: string;
+      /** Type */
+      type: string;
+      /** Module */
+      module: string;
+      /** Status */
+      status: string;
+      /** Note */
+      note: string;
+      /** Url */
+      url: string;
+      /** Target Url */
+      target_url: string;
+      /** Section Name */
+      section_name: string;
+      /** Files */
+      files: components["schemas"]["ItemFile"][];
+    };
+    /** CourseSection */
+    CourseSection: {
+      /** Number */
+      number: number;
+      /** Name */
+      name: string;
+      /** Items */
+      items: components["schemas"]["CourseItem"][];
+    };
     /** CourseSummary */
     CourseSummary: {
       /** Configured */
@@ -227,15 +340,34 @@ export interface components {
       /** Error */
       error: string;
     };
+    /** FileRequest */
+    FileRequest: {
+      /** Path */
+      path: string;
+    };
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
     };
-    /** Health */
-    Health: {
-      /** Ok */
-      ok: boolean;
+    /** ItemFile */
+    ItemFile: {
+      /** Path */
+      path: string;
+      /** Name */
+      name: string;
+      /** Ext */
+      ext: string;
+      /** Size */
+      size: number | null;
+      /** Exists */
+      exists: boolean;
+      /** Text Path */
+      text_path: string | null;
+      /** Flags */
+      flags: string[];
+      /** Openable */
+      openable: boolean;
     };
     /** Job */
     Job: {
@@ -245,7 +377,7 @@ export interface components {
        * Action
        * @enum {string}
        */
-      action: "scrape" | "check_session" | "login";
+      action: "scrape" | "download" | "check_session" | "login";
       /** Label */
       label: string;
       /**
@@ -281,6 +413,11 @@ export interface components {
       level: "info" | "warning" | "error" | "output";
       /** Text */
       text: string;
+    };
+    /** Ok */
+    Ok: {
+      /** Ok */
+      ok: boolean;
     };
     /** Progress */
     Progress: {
@@ -334,9 +471,9 @@ export interface components {
     StartJob: {
       /**
        * Action
-       * @constant
+       * @enum {string}
        */
-      action: "scrape";
+      action: "scrape" | "download";
     };
     /** ValidationError */
     ValidationError: {
@@ -375,7 +512,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["Health"];
+          "application/json": components["schemas"]["Ok"];
         };
       };
     };
@@ -528,6 +665,202 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CourseSummary"];
+        };
+      };
+    };
+  };
+  course_items_api_course_items_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CourseContent"];
+        };
+      };
+    };
+  };
+  get_file_api_files__path__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        path: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  open_file_api_files_open_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FileRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Ok"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  reveal_file_api_files_reveal_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FileRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Ok"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorBody"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };

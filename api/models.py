@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 SessionStatus = Literal["valid", "expired", "missing", "unknown"]
 JobState = Literal["running", "succeeded", "failed", "session_expired", "cancelled"]
-JobAction = Literal["scrape", "check_session", "login"]
+JobAction = Literal["scrape", "download", "check_session", "login"]
 LineLevel = Literal["info", "warning", "error", "output"]
 
 
@@ -14,7 +14,7 @@ class ErrorBody(BaseModel):
     error: str
 
 
-class Health(BaseModel):
+class Ok(BaseModel):
     ok: bool
 
 
@@ -80,4 +80,46 @@ class Job(BaseModel):
 
 
 class StartJob(BaseModel):
-    action: Literal["scrape"]
+    action: Literal["scrape", "download"]
+
+
+class ItemFile(BaseModel):
+    path: str  # relative to the project root, for /api/files/{path}
+    name: str
+    ext: str
+    size: int | None
+    exists: bool
+    text_path: str | None  # extracted .md (Stage 4), if any
+    flags: list[str]
+    openable: bool  # may be opened with the default Windows app
+
+
+class CourseItem(BaseModel):
+    id: str
+    title: str
+    type: str
+    module: str
+    status: str
+    note: str
+    url: str
+    target_url: str
+    section_name: str
+    files: list[ItemFile]
+
+
+class CourseSection(BaseModel):
+    number: int
+    name: str
+    items: list[CourseItem]
+
+
+class CourseContent(BaseModel):
+    scraped: bool
+    course_id: str | None
+    name: str | None
+    crawled_at: str | None
+    sections: list[CourseSection]
+
+
+class FileRequest(BaseModel):
+    path: str

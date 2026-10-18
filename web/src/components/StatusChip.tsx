@@ -19,6 +19,11 @@ const STATUS: Record<string, [string, Tone]> = {
   skipped: ["Skipped", "default"],
 };
 
+/** Display name of each status, for filters and lists. */
+export const STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(STATUS).map(([status, [label]]) => [status, label]),
+);
+
 export function StatusChip({
   status,
   size = "small",

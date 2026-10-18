@@ -25,9 +25,12 @@ describe("AppLayout", () => {
     expect(
       within(nav).getByRole("link", { name: "Dashboard" }),
     ).toHaveAttribute("aria-current", "page");
+    expect(
+      within(nav).getByRole("link", { name: "Course content" }),
+    ).not.toHaveAttribute("aria-disabled");
     // Screens from later stages are listed but can't be opened yet.
-    const later = within(nav).getByRole("link", { name: /Course content/ });
+    const later = within(nav).getByRole("link", { name: /Search/ });
     expect(later).toHaveAttribute("aria-disabled", "true");
-    expect(later).toHaveTextContent("Coming in stage B");
+    expect(later).toHaveTextContent("Coming in stage D");
   });
 });

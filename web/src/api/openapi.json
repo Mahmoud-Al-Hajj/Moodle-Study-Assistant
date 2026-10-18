@@ -15,7 +15,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Health"
+                  "$ref": "#/components/schemas/Ok"
                 }
               }
             }
@@ -168,6 +168,222 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CourseSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/course/items": {
+      "get": {
+        "summary": "Course Items",
+        "operationId": "course_items_api_course_items_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/{path}": {
+      "get": {
+        "summary": "Get File",
+        "operationId": "get_file_api_files__path__get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/open": {
+      "post": {
+        "summary": "Open File",
+        "operationId": "open_file_api_files_open_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/reveal": {
+      "post": {
+        "summary": "Reveal File",
+        "operationId": "reveal_file_api_files_reveal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -547,6 +763,150 @@
   },
   "components": {
     "schemas": {
+      "CourseContent": {
+        "properties": {
+          "scraped": {
+            "type": "boolean",
+            "title": "Scraped"
+          },
+          "course_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "crawled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawled At"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/CourseSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scraped",
+          "course_id",
+          "name",
+          "crawled_at",
+          "sections"
+        ],
+        "title": "CourseContent"
+      },
+      "CourseItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "target_url": {
+            "type": "string",
+            "title": "Target Url"
+          },
+          "section_name": {
+            "type": "string",
+            "title": "Section Name"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFile"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "type",
+          "module",
+          "status",
+          "note",
+          "url",
+          "target_url",
+          "section_name",
+          "files"
+        ],
+        "title": "CourseItem"
+      },
+      "CourseSection": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CourseItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "name",
+          "items"
+        ],
+        "title": "CourseSection"
+      },
       "CourseSummary": {
         "properties": {
           "configured": {
@@ -652,6 +1012,19 @@
         ],
         "title": "ErrorBody"
       },
+      "FileRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "FileRequest"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -665,18 +1038,70 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "Health": {
+      "ItemFile": {
         "properties": {
-          "ok": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ext": {
+            "type": "string",
+            "title": "Ext"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "exists": {
             "type": "boolean",
-            "title": "Ok"
+            "title": "Exists"
+          },
+          "text_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Path"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "openable": {
+            "type": "boolean",
+            "title": "Openable"
           }
         },
         "type": "object",
         "required": [
-          "ok"
+          "path",
+          "name",
+          "ext",
+          "size",
+          "exists",
+          "text_path",
+          "flags",
+          "openable"
         ],
-        "title": "Health"
+        "title": "ItemFile"
       },
       "Job": {
         "properties": {
@@ -688,6 +1113,7 @@
             "type": "string",
             "enum": [
               "scrape",
+              "download",
               "check_session",
               "login"
             ],
@@ -809,6 +1235,19 @@
           "text"
         ],
         "title": "JobLine"
+      },
+      "Ok": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "Ok"
       },
       "Progress": {
         "properties": {
@@ -957,7 +1396,10 @@
         "properties": {
           "action": {
             "type": "string",
-            "const": "scrape",
+            "enum": [
+              "scrape",
+              "download"
+            ],
             "title": "Action"
           }
         },
